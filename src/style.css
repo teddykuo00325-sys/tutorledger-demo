@@ -819,3 +819,14 @@ textarea.csv { margin-top: 4px; border-radius: 14px; border: 0; background: var(
 .g-steps li { padding: 5px 0; }
 .g-steps li::marker { color: var(--accent); font-weight: 700; font-family: var(--num, inherit); }
 .nav-l { gap: 6px; }
+
+/* 不分科目的圖案:琴房那面斜切的色塊牆(薄荷、奶油黃、珊瑚、粉紫、芥末)。
+   取代琴鍵——課約不只給音樂老師用,數學老師的回報卡上不該印鋼琴鍵。 */
+:root[data-skin="studio"] {
+  --blocks: linear-gradient(105deg, #9fdcd2 0 24%, #f6e9a8 24% 41%, #f08f9f 41% 57%, #e7c3e0 57% 79%, #e5b04c 79% 100%);
+}
+[data-skin="studio"] .sharecard::before { background: var(--blocks); height: 14px; }
+[data-skin="studio"] .sharecard { padding-top: 30px; }
+[data-skin="studio"] .large-title::after {
+  width: 54px; height: 5px; border-radius: 3px; background: var(--blocks); opacity: 1; filter: none !important;
+}
