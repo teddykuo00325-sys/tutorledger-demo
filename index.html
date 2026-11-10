@@ -1800,18 +1800,21 @@ if (typeof module !== "undefined") module.exports = R;
     var st = student(s.studentId);
     return R.salutation(st) + "您好：今天" + st.subject + "課練習了既定進度。" + sig();
   }
+  function balLong(b) { return b.net >= 0 ? "剩餘 " + b.net + " 堂" : "欠 " + (-b.net) + " 堂"; }
+  /** 體驗課看的是這一堂的紀錄,不是學生現在的狀態;體驗課不印堂數(還沒買包,必然是剩餘 0 堂)。 */
   function reportCardHtml(s) {
-    var st = student(s.studentId), b = R.balance(S, st.id, NOW), nx = nextLesson(st.id, s.at);
+    var st = student(s.studentId), b = R.balance(S, st.id, NOW), nx = nextLesson(st.id, s.at), trial = s.kind === "trial";
     var slots = S.slots.filter(function (x) { return x.studentId === st.id; });
     var h = '<div class="sharecard" id="paper"><div class="kicker">' + esc(st.subject) + "課後回報</div>" +
       '<div class="top"><span class="who">' + esc(st.name) + '</span><span class="when">' + dateText(s.at) + "</span></div>" +
-      '<div class="okline">' + icon("seal") + "本日已上課</div>" +
-      '<div class="bigbal' + (attention(b) ? " low" : "") + '">' + (b.net >= 0 ? "剩餘 " + b.net + " 堂" : "欠 " + (-b.net) + " 堂") + "</div>" +
+      '<div class="okline">' + icon("seal") + (trial ? "本日體驗課試上" : "本日已上課") + "</div>" +
+      (trial ? "" : '<div class="bigbal' + (attention(b) ? " low" : "") + '">' + balLong(b) + "</div>") +
       '<div class="stbl">' +
       "<div><span>每週時段</span><b>" + (slots.length ? slots.map(function (x) { var a = R.toMin(x.start);
         return WEEK[x.dow] + " " + range(a, a + x.minutes); }).join("、") : "—") + "</b></div>" +
       "<div><span>下次上課</span><b>" + (nx ? (nx.getMonth() + 1) + "月" + nx.getDate() + "日 " + hm(nx) : "—") + "</b></div>" +
-      "<div><span>可用堂數</span><b>" + b.spendable + " 堂</b></div></div>" +
+      (trial ? "" : "<div><span>可用堂數</span><b>" + b.spendable + " 堂</b></div>" +
+        (b.owed > 0 ? "<div><span>欠堂</span><b>" + b.owed + " 堂</b></div>" : "")) + "</div>" +
       (s.report !== "" ? '<p class="msg">' + esc(s.report === undefined ? defaultReport(s) : s.report) + "</p>" : "");
     if (s.signature) {
       h += '<div class="signed"><div><span class="lbl">簽收</span><img src="' + s.signature + '" alt="家長簽名"></div>' +
@@ -2398,7 +2401,7 @@ if (typeof module !== "undefined") module.exports = R;
       case "shareCard":
         var sc = R.byId(S.sessions, b.getAttribute("data-sess")), bal = R.balance(S, sc.studentId, NOW);
         var txt = sc.report === undefined ? defaultReport(sc) : sc.report;
-        share((txt ? txt + "\n" : "") + (bal.net >= 0 ? "剩餘 " + bal.net + " 堂" : "欠 " + (-bal.net) + " 堂"), $("paper")); break;
+        share((txt ? txt : "") + (sc.kind === "trial" ? "" : (txt ? "\n" : "") + balLong(bal)), $("paper")); break;
       case "reminders": openReminders(); break;
       case "reminder": openReminder(b.getAttribute("data-sid"), b.getAttribute("data-slot")); break;
       case "shareReminder": share(reminderInfo(b.getAttribute("data-sid"), b.getAttribute("data-slot")).text, $("remCard")); break;
