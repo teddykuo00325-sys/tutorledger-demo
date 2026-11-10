@@ -300,9 +300,11 @@
     var right = rec && rec.status === "attended"
       ? '<button type="button" class="bordered sm" data-act="card" data-sess="' + rec.id + '">回報卡</button>'
       : (!rec && allows ? '<button type="button" class="sm" data-act="attend"' + data + ">簽到</button>" : "");
+    // 體驗生還沒買包,堂數必然是 0——紅字「剩 0 堂」會讓人以為該催續費
+    var line = st.isTrial ? "體驗課試上中" : R.balanceText(b), warn = !st.isTrial && attention(b);
     return '<div class="row lesson"' + (!rec && allows ? ' data-lp="1"' + data : "") + '><div class="grow">' +
-      '<div class="nm hl">' + esc(st.name) + '</div><div class="sub' + (attention(b) ? " red" : "") + '">' +
-      range(sp.startMin, sp.endMin) + " · " + R.balanceText(b) + "</div>" +
+      '<div class="nm hl">' + esc(st.name) + '</div><div class="sub' + (warn ? " red" : "") + '">' +
+      range(sp.startMin, sp.endMin) + " · " + line + "</div>" +
       (status ? '<div class="cap">' + status + "</div>" : "") + "</div>" + right + "</div>";
   }
 
@@ -635,13 +637,13 @@
     var slots = S.slots.filter(function (x) { return x.studentId === st.id; });
     var h = '<div class="sharecard" id="paper"><div class="kicker">' + esc(st.subject) + "課後回報</div>" +
       '<div class="top"><span class="who">' + esc(st.name) + '</span><span class="when">' + dateText(s.at) + "</span></div>" +
-      '<div class="okline">' + icon("seal") + (s.kind === "trial" ? "本日試上" : "本日已上課") + "</div>" +
-      (st.isTrial ? "" : '<div class="bigbal' + (attention(b) ? " low" : "") + '">' + (b.net >= 0 ? "剩餘 " + b.net + " 堂" : "欠 " + (-b.net) + " 堂") + "</div>") +
+      '<div class="okline">' + icon("seal") + "本日已上課</div>" +
+      '<div class="bigbal' + (attention(b) ? " low" : "") + '">' + (b.net >= 0 ? "剩餘 " + b.net + " 堂" : "欠 " + (-b.net) + " 堂") + "</div>" +
       '<div class="stbl">' +
       "<div><span>每週時段</span><b>" + (slots.length ? slots.map(function (x) { var a = R.toMin(x.start);
         return WEEK[x.dow] + " " + range(a, a + x.minutes); }).join("、") : "—") + "</b></div>" +
       "<div><span>下次上課</span><b>" + (nx ? (nx.getMonth() + 1) + "月" + nx.getDate() + "日 " + hm(nx) : "—") + "</b></div>" +
-      (st.isTrial ? "" : "<div><span>可用堂數</span><b>" + b.spendable + " 堂</b></div>") + "</div>" +
+      "<div><span>可用堂數</span><b>" + b.spendable + " 堂</b></div></div>" +
       (s.report !== "" ? '<p class="msg">' + esc(s.report === undefined ? defaultReport(s) : s.report) + "</p>" : "");
     if (s.signature) {
       h += '<div class="signed"><div><span class="lbl">簽收</span><img src="' + s.signature + '" alt="家長簽名"></div>' +
@@ -1228,7 +1230,7 @@
       case "shareCard":
         var sc = R.byId(S.sessions, b.getAttribute("data-sess")), bal = R.balance(S, sc.studentId, NOW);
         var txt = sc.report === undefined ? defaultReport(sc) : sc.report;
-        share((txt ? txt + "\n" : "") + (student(sc.studentId).isTrial ? "" : (bal.net >= 0 ? "剩餘 " + bal.net + " 堂" : "欠 " + (-bal.net) + " 堂")), $("paper")); break;
+        share((txt ? txt + "\n" : "") + (bal.net >= 0 ? "剩餘 " + bal.net + " 堂" : "欠 " + (-bal.net) + " 堂"), $("paper")); break;
       case "reminders": openReminders(); break;
       case "reminder": openReminder(b.getAttribute("data-sid"), b.getAttribute("data-slot")); break;
       case "shareReminder": share(reminderInfo(b.getAttribute("data-sid"), b.getAttribute("data-slot")).text, $("remCard")); break;
