@@ -34,7 +34,7 @@ python3 -m http.server 8765    # 開 http://localhost:8765
 ## 與 iOS 版的關係
 
 規則是**簡化重寫**,不是共用程式碼。真正的規則在 iOS 版的 LedgerCore(219 條測試);
-這裡的 55 條測試只確保示範頁自己說的話是對的。兩邊各寫一份必然會漂移——
+這裡的 67 條測試只確保示範頁自己說的話是對的。兩邊各寫一份必然會漂移——
 所以這個示範頁只用來展示,不回頭影響產品。
 
 規則層的註解標出了對應的 Swift 函式(例如 `pickPackage` ↔ `selectPackageForDeduction`),

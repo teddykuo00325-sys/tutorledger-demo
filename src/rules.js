@@ -284,11 +284,57 @@ var R = (function () {
     return mk.replace("-", "") + "-" + ns;
   }
 
+  /** 某一天的課量(月曆格)。total 取「應上」與「實際紀錄」較大者——臨時補課會讓紀錄多於預定;
+   *  pending 是還沒處理的那幾堂,有的話徽章用強調色。(DayLoad) */
+  function dayLoad(S, day) {
+    var specs = daySpecs(S, day), d0 = sod(day).getTime();
+    var recorded = S.sessions.filter(function (s) { return sod(s.at).getTime() === d0; }).length;
+    var pend = specs.filter(function (sp) { return !recordAt(S, sp.studentId, atTime(day, sp.start)); }).length;
+    return { scheduled: specs.length, recorded: recorded, total: Math.max(specs.length, recorded), pending: pend };
+  }
+
+  /** 一位學生這個月:上課、請假、消耗了多少錢。(LedgerMath.monthlySummary) */
+  function studentMonth(S, studentId, now) {
+    var mk = monthKey(now), r = { attended: 0, makeups: 0, leaves: 0, consumed: 0 };
+    S.sessions.forEach(function (s) {
+      if (s.studentId !== studentId || monthKey(s.at) !== mk) return;
+      if (s.status === "attended") { r.attended++; r.consumed += s.price; if (s.kind === "makeup") r.makeups++; }
+      else if (s.status === "leave") r.leaves++;
+    });
+    return r;
+  }
+
+  /** 匯出報表前的摘要:目前狀況與要處理的事。(BusinessReport) */
+  function reportSummary(S, now) {
+    var r = { activeStudents: 0, spendable: 0, owed: 0, totalCollected: 0, liability: 0,
+      expiringSoonLessons: 0, expiringSoonAmount: 0, renewalAlerts: 0, forfeitedLessons: 0, forfeitedAmount: 0 };
+    S.students.forEach(function (st) {
+      if (st.archivedAt) return;
+      r.activeStudents++;
+      var b = balance(S, st.id, now);
+      r.spendable += b.spendable; r.owed += b.owed;
+      if (needsRenewal(S, st, now)) r.renewalAlerts++;
+    });
+    S.packages.forEach(function (p) {
+      r.totalCollected += p.paid;
+      if (p.feeKind !== "tuition" || p.refundedAt) return;
+      var deferred = p.paid - consumedAmount(S, p);
+      if (isExpired(p, now)) { r.forfeitedAmount += deferred; r.forfeitedLessons += remaining(S, p); }
+      else r.liability += deferred;
+    });
+    expiring(S, now, 30).forEach(function (e) {
+      if (e.forfeited) return;
+      r.expiringSoonLessons += e.remaining; r.expiringSoonAmount += e.deferred;
+    });
+    return r;
+  }
+
   /** 本月對帳。收款用實際收費日期;教材費當月即認列;只有實際上到的課才認列、才產生應付。 */
   function monthSummary(S, now) {
     var mk = monthKey(now);
     var r = { collected: 0, material: 0, lessonIncome: 0, attended: 0, leaves: 0, cancels: 0,
-      trials: 0, refunds: 0, liability: 0, forfeited: 0, teachers: [], payable: 0 };
+      trials: 0, trialRevenue: 0, refunds: 0, liability: 0, forfeited: 0, teachers: [], payable: 0 };
+    var taught = {};
     S.packages.forEach(function (p) {
       if (monthKey(cashDate(p)) === mk) {
         r.collected += p.paid;
@@ -302,22 +348,32 @@ var R = (function () {
     S.sessions.forEach(function (s) {
       if (monthKey(s.at) !== mk) return;
       if (s.status === "attended") {
-        r.attended++; r.lessonIncome += s.price;
-        if (s.kind === "trial") r.trials++;
+        r.attended++; r.lessonIncome += s.price; taught[s.studentId] = true;
+        if (s.kind === "trial") { r.trials++; r.trialRevenue += s.price; }
       } else if (s.status === "leave") r.leaves++;
       else if (s.status === "teacherCancel") r.cancels++;
     });
+    r.studentsTaught = Object.keys(taught).length;
+    // 外聘老師結算:這個月有課或有付款的才列。帶進 = 他上的課認列了多少;價差 = 帶進 − 應付,
+    // 賠錢的班看得出來。(ReportBuilder.settlements)
     S.teachers.forEach(function (t) {
       if (t.isSelf) return;
-      var payable = 0, paid = 0;
+      var payable = 0, paid = 0, lessons = 0, revenue = 0;
       S.sessions.forEach(function (s) {
-        if (s.status === "attended" && s.teacherId === t.id && monthKey(s.at) === mk) payable += s.payout;
+        if (s.status === "attended" && s.teacherId === t.id && monthKey(s.at) === mk) {
+          payable += s.payout; lessons++; revenue += s.price;
+        }
       });
       S.payments.forEach(function (p) { if (p.teacherId === t.id && p.month === mk) paid += p.amount; });
-      r.teachers.push({ teacher: t, payable: payable, paid: paid, unpaid: Math.max(0, payable - paid) });
+      if (!lessons && !paid) return;
+      var unpaid = Math.max(0, payable - paid);
+      r.teachers.push({ teacher: t, lessons: lessons, revenue: revenue, payable: payable, paid: paid,
+        unpaid: unpaid, margin: revenue - payable, isSettled: unpaid === 0 });
       r.payable += payable;
     });
     r.recognized = r.lessonIncome + r.material;
+    // 收款多於認列 → 新增預收;少於 → 消化先前的預收
+    r.deferredChange = r.collected - r.recognized;
     r.net = r.recognized - r.payable;
     return r;
   }
@@ -361,7 +417,8 @@ var R = (function () {
     daySpecs: daySpecs, groupKey: groupKey, groupLessons: groupLessons, conflicts: conflicts,
     recordAt: recordAt, newId: newId, attend: attend, mark: mark, undo: undo, pending: pending,
     expiring: expiring, teacherSchedule: teacherSchedule, receiptNumber: receiptNumber,
-    monthSummary: monthSummary, salutation: salutation, signature: signature,
+    monthSummary: monthSummary, dayLoad: dayLoad, studentMonth: studentMonth, reportSummary: reportSummary,
+    salutation: salutation, signature: signature,
     reminderText: reminderText, money: money
   };
 })();

@@ -201,5 +201,43 @@ function spec(sid, start, end, extra) {
   eq("課前提醒不含電話", /09\d{8}/.test(R.reminderText(st, "16:00", "", 5, "王", "")), false);
 })();
 
+// ---- 月曆格、外聘結算、報表摘要 ----
+(function () {
+  var S = base();
+  S.slots = [{ id: "s1", dow: 2, start: "16:00", minutes: 60, studentId: "an", classId: null, teacherId: null },
+             { id: "s2", dow: 2, start: "17:00", minutes: 60, studentId: null, classId: "kids", teacherId: null }];
+  S.packages = [pkg("p", "an", 10, 8000)];
+  eq("月曆格:三堂都待處理", R.dayLoad(S, T), { scheduled: 3, recorded: 0, total: 3, pending: 3 });
+  R.attend(S, R.daySpecs(S, T)[0], R.atTime(T, "16:00"));
+  eq("處理一堂後待處理 2", R.dayLoad(S, T).pending, 2);
+  R.attend(S, spec("an", 1200, 1260, { price: 800 }), R.atTime(T, "20:00"));   // 臨時加的課
+  eq("紀錄比預定多時取大者", R.dayLoad(S, T).total, 3);
+
+  S = base();
+  S.packages = [pkg("p", "you", 10, 6000, { purchasedAt: day(-1), classId: "kids" })];
+  R.attend(S, spec("you", 1020, 1080, { classId: "kids", price: 600, teacherId: "chen" }), R.atTime(T, "17:00"));
+  R.attend(S, spec("yu", 1020, 1080, { classId: "kids", price: 600, teacherId: "chen" }), R.atTime(T, "17:00"));
+  var m = R.monthSummary(S, T), c = m.teachers[0];
+  eq("帶進 1200、應付 600、價差 600", [c.lessons, c.revenue, c.payable, c.margin], [2, 1200, 600, 600]);
+  eq("沒付清不算結清", c.isSettled, false);
+  eq("新增預收 = 收款 − 認列", m.deferredChange, 6000 - 1200);
+  eq("這個月教了幾位", m.studentsTaught, 2);
+  eq("林老師這個月沒課就不列", m.teachers.length, 1);
+
+  S = base();
+  var hr = { id: "x", name: "貴老師", mode: "hourly", hourly: 800 };
+  S.teachers.push(hr);
+  R.attend(S, spec("you", 1020, 1080, { classId: "kids", price: 600, teacherId: "x" }), R.atTime(T, "17:00"));
+  eq("班價低於鐘點費 → 價差是負的", R.monthSummary(S, T).teachers[0].margin, -200);
+
+  S = base();
+  S.packages = [pkg("a", "an", 10, 8000, { expires: day(10) }), pkg("b", "kai", 10, 9000, { expires: day(-3) }),
+                pkg("m", "an", 0, 500, { feeKind: "material" })];
+  var rs = R.reportSummary(S, T);
+  eq("累計收款含教材", rs.totalCollected, 17500);
+  eq("30 天內到期:10 堂、8000", [rs.expiringSoonLessons, rs.expiringSoonAmount], [10, 8000]);
+  eq("已作廢:10 堂、9000(不算負債)", [rs.forfeitedLessons, rs.forfeitedAmount, rs.liability], [10, 9000, 8000]);
+})();
+
 print("\n" + pass + " 通過," + fail + " 失敗");
 if (fail > 0) throw new Error(fail + " 項失敗");
