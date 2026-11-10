@@ -220,7 +220,7 @@
     return { tab: "today",
       stack: { today: [{ v: "today" }], students: [{ v: "students" }], ledger: [{ v: "ledger" }], settings: [{ v: "settings" }] },
       mode: "today", calMonth: new Date(T.getFullYear(), T.getMonth(), 1), calDay: T,
-      teacherName: (ui && ui.teacherName !== undefined) ? ui.teacherName : "王", studio: (ui && ui.studio) || "" };
+      teacherName: (ui && ui.teacherName !== undefined) ? ui.teacherName : "施", studio: (ui && ui.studio) || "" };
   }
   function cur() { var s = ui.stack[ui.tab]; return s[s.length - 1]; }
   function push(v, arg) { ui.stack[ui.tab].push({ v: v, arg: arg }); render(true); }
@@ -553,7 +553,7 @@
     var theme = document.documentElement.getAttribute("data-theme") || "system";
     var h = group("老師",
       '<div class="row frow"><input id="setName" data-input="teacherName" value="' + esc(ui.teacherName) +
-      '" placeholder="姓氏或稱呼(例：王)" maxlength="12" aria-label="姓氏或稱呼"></div>' +
+      '" placeholder="姓氏或稱呼(例：施)" maxlength="12" aria-label="姓氏或稱呼"></div>' +
       '<div class="row frow"><input id="setStudio" data-input="studio" value="' + esc(ui.studio) +
       '" placeholder="教室名稱(選填)" maxlength="20" aria-label="教室名稱"></div>' +
       '<div class="row lc dim"><span class="k">回報署名</span><span class="v" id="sigPreview">' + esc(sig()) + "</span></div>");
@@ -562,8 +562,10 @@
       "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
     h += group("資料", upcoming("備份到「檔案」", "W5") + upcoming("從備份還原", "W5") + upcoming("載入示範資料", "W5"));
     h += group("關於", lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
+    var skin = document.documentElement.getAttribute("data-skin") || "classic";
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
-      "</div>" + rowBtn("重設示範資料", "undo", "reset"),
+      "</div>" + '<div class="row">' + seg([["studio", "新風格(樣品)"], ["classic", "原本的藍"]], skin, "skin") + "</div>" +
+      rowBtn("重設示範資料", "undo", "reset"),
       "這一區只有網頁示範版有。iOS 版跟著系統的深淺色,分享出去的卡片一律是白紙。");
     return { title: "設定", html: h };
   }
@@ -1299,6 +1301,7 @@
         var th = b.getAttribute("data-v");
         if (th === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", th);
         render(); break;
+      case "skin": document.documentElement.setAttribute("data-skin", b.getAttribute("data-v")); render(); break;
       case "reset": S = seed(); ui = newUi(); closeSheet(); render(true); toast("已重設示範資料"); break;
       case "close": closeSheet(); break;
     }
@@ -1326,6 +1329,7 @@
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
 
+  document.documentElement.setAttribute("data-skin", "studio");   // 美術樣品:預設新風格
   S = seed();
   ui = newUi();
   render(true);

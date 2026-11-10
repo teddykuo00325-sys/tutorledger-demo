@@ -20,7 +20,7 @@ def src(name):
 css, shell, rules, app = src("style.css"), src("shell.html"), src("rules.js"), src("app.js")
 title = "<title>課約 網頁示範</title>\n"
 font = ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
-        'family=Noto+Sans+TC:wght@400;500;700&display=swap">\n')
+        'family=Noto+Sans+TC:wght@400;500;700&family=Quicksand:wght@500;600;700&display=swap">\n')
 style = "<style>\n" + css + "</style>\n"
 body = shell + '\n<script>\n' + rules + "\n" + app + "\n</script>\n"
 

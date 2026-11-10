@@ -6,7 +6,7 @@
 <meta name="description" content="課約:單人家教的堂數帳本。下課一鍵扣堂、家長立刻收到剩餘堂數、月底對帳零爭議。示範版,全是假資料。">
 <style>html,body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
 <title>課約 網頁示範</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Quicksand:wght@500;600;700&display=swap">
 <style>
 /* 版面:桌機上是一支置中的手機,內容在手機裡捲動,分頁列是浮在內容上方的玻璃。
    色票對齊 iOS 版:BrandPrimary 淺 #2563EB / 深 #3B82F6 / 高對比淺 #1D4ED8 / 高對比深 #60A5FA。
@@ -672,6 +672,147 @@ textarea.csv { margin-top: 4px; border-radius: 14px; border: 0; background: var(
 .sharecard .dimp { color: var(--paper-muted); }
 .sharecard .stbl + .stbl { margin-top: 8px; }
 .row .seg { margin: 0; width: 100%; }
+
+/* =====================================================================
+   美術樣品「新風格」(data-skin="studio")
+   配色取自工作室實景與招生 DM:薄荷綠(DM #66C6BA)、奶油白牆、芥末黃、
+   珊瑚粉、粉紫、黑白琴鍵、金色細線。原則:
+   - 大面積用淺色(薄荷、奶油),文字與按鈕用加深的綠,維持 4.5:1 以上
+   - 紅色只留給「要處理」(欠堂、剩不多);珊瑚粉只做裝飾(體驗中),不和警示混用
+   - 芥末黃當「提醒」(快到期),剛好在配色裡
+   - 圖案只用兩種:琴鍵(卡片頂端、大標題底下)、拱門(空白狀態)
+   ===================================================================== */
+:root[data-skin="studio"] {
+  --page: #f4eee6;
+  --bg: #fbf8f3;
+  --surface: #ffffff;
+  --surface-2: #f7f2ea;
+  --fg: #1f1b18;
+  --muted: #6b6259;
+  --faint: #a1978c;
+  --line: #ece5dc;
+  --accent: #0f7a70;
+  --accent-soft: #dcf1ec;
+  --on-accent: #ffffff;
+  --brand: #66c6ba;
+  --brand-soft: #d3eee9;
+  --coral: #a8344a;
+  --coral-soft: #fde2e8;
+  --warn: #9a5b06;
+  --warn-soft: #fbeed5;
+  --danger: #d03a2f;
+  --ok: #18794e;
+  --gold: #b8955a;
+  --key: #1f1b18;
+  --glass: rgba(255, 252, 247, .66);
+  --glass-strong: rgba(255, 252, 247, .86);
+  --sheet: rgba(251, 248, 243, .95);
+  --paper: #fffdf8;
+  --paper-ink: #1f1b18;
+  --paper-muted: #776d63;
+  --paper-accent: #0f7a70;
+  --paper-line: #ebe2d4;
+  --num: "Quicksand", "Noto Sans TC", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="studio"]:not([data-theme="light"]) {
+    --page: #0c0b0a; --bg: #141210; --surface: #1f1c19; --surface-2: #191614;
+    --fg: #f4efe9; --muted: #b3a99e; --faint: #7d746a; --line: #322d28;
+    --accent: #5fc6b8; --accent-soft: #173531; --on-accent: #0a1f1c;
+    --brand: #4fb3a6; --brand-soft: #1b3834;
+    --coral: #f39aaa; --coral-soft: #3b2128; --warn: #f0b54a; --warn-soft: #33270f;
+    --danger: #ff7b6e; --ok: #4ade80;
+    --glass: rgba(40, 36, 32, .58); --glass-strong: rgba(40, 36, 32, .82); --sheet: rgba(28, 25, 22, .94);
+  }
+}
+:root[data-skin="studio"][data-theme="dark"] {
+  --page: #0c0b0a; --bg: #141210; --surface: #1f1c19; --surface-2: #191614;
+  --fg: #f4efe9; --muted: #b3a99e; --faint: #7d746a; --line: #322d28;
+  --accent: #5fc6b8; --accent-soft: #173531; --on-accent: #0a1f1c;
+  --brand: #4fb3a6; --brand-soft: #1b3834;
+  --coral: #f39aaa; --coral-soft: #3b2128; --warn: #f0b54a; --warn-soft: #33270f;
+  --danger: #ff7b6e; --ok: #4ade80;
+  --glass: rgba(40, 36, 32, .58); --glass-strong: rgba(40, 36, 32, .82); --sheet: rgba(28, 25, 22, .94);
+}
+
+/* 琴鍵:一個八度 7 白 5 黑,接起來就是一排鍵盤 */
+:root[data-skin="studio"] {
+  --keys: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='20'%3E%3Crect width='70' height='20' fill='%23fff'/%3E%3Cg stroke='%23d9d2c8' stroke-width='1'%3E%3Cpath d='M10.5 0v20M20.5 0v20M30.5 0v20M40.5 0v20M50.5 0v20M60.5 0v20M70 0v20'/%3E%3C/g%3E%3Cg fill='%231f1b18'%3E%3Crect x='7' width='6' height='12' rx='1'/%3E%3Crect x='17' width='6' height='12' rx='1'/%3E%3Crect x='37' width='6' height='12' rx='1'/%3E%3Crect x='47' width='6' height='12' rx='1'/%3E%3Crect x='57' width='6' height='12' rx='1'/%3E%3C/g%3E%3C/svg%3E");
+  --blackkeys: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='35' height='6'%3E%3Cg fill='%231f1b18'%3E%3Crect x='3' width='3' height='6' rx='.8'/%3E%3Crect x='8.5' width='3' height='6' rx='.8'/%3E%3Crect x='18.5' width='3' height='6' rx='.8'/%3E%3Crect x='23.5' width='3' height='6' rx='.8'/%3E%3Crect x='28.5' width='3' height='6' rx='.8'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* 頁面與手機外框 */
+[data-skin="studio"] .badge-demo { background: var(--brand); color: #0a2a26; }
+[data-skin="studio"] .banner strong { color: var(--accent); }
+[data-skin="studio"] .phone { box-shadow: var(--shadow), 0 0 0 1px var(--line), 0 0 0 7px var(--brand-soft); }
+
+/* 大標題:底下一小段黑鍵,像工作室門口的琴鍵牆 */
+[data-skin="studio"] .large-title { position: relative; padding-bottom: 12px; margin-bottom: 14px; }
+[data-skin="studio"] .large-title::after {
+  content: ""; position: absolute; left: 1px; bottom: 0; width: 70px; height: 6px;
+  background: var(--blackkeys) repeat-x; opacity: .9;
+}
+@media (prefers-color-scheme: dark) { [data-skin="studio"]:not([data-theme="light"]) .large-title::after { filter: invert(1); opacity: .55; } }
+[data-skin="studio"][data-theme="dark"] .large-title::after { filter: invert(1); opacity: .55; }
+
+/* 分頁列與分段選單 */
+[data-skin="studio"] .tabs button[aria-current="true"] { background: var(--brand-soft); color: var(--accent); }
+[data-skin="studio"] .seg button[aria-pressed="true"] { color: var(--accent); }
+
+/* 主要按鈕:DM 的薄荷綠,加深一階壓白字 */
+[data-skin="studio"] button.glass-pro {
+  background: linear-gradient(180deg, color-mix(in srgb, #fff 10%, var(--accent)), var(--accent));
+  border-color: color-mix(in srgb, #fff 20%, var(--accent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 rgba(0, 0, 0, .12),
+              0 8px 20px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* 今日頁日期列:薄荷底 */
+[data-skin="studio"] .screen > .grp:first-child .card { background: var(--brand-soft); }
+[data-skin="studio"] .screen > .grp:first-child .row { border: 0; }
+
+/* 月曆 */
+[data-skin="studio"] .cal-cell .cal-d.sel { background: var(--accent); color: var(--on-accent); }
+[data-skin="studio"] .cal-cell .cal-d.today { box-shadow: inset 0 0 0 2px var(--brand); }
+[data-skin="studio"] .cal-badge.on { background: var(--brand); color: #0a2a26; }
+[data-skin="studio"] .cal-d, [data-skin="studio"] .cal-badge, [data-skin="studio"] .cal-head b { font-family: var(--num); }
+
+/* 體驗中:珊瑚粉,純裝飾 */
+[data-skin="studio"] .cap-pill { color: var(--coral); background: var(--coral-soft); }
+[data-skin="studio"] .cap-pill.blue { color: var(--accent); background: var(--accent-soft); }
+
+/* 空白狀態:圖示放在拱門裡(工作室的拱門玻璃門) */
+[data-skin="studio"] .unavail svg.ic {
+  box-sizing: content-box; padding: 22px 20px 16px; width: 40px; height: 40px;
+  border-radius: 999px 999px 14px 14px; background: var(--brand-soft); color: var(--accent);
+}
+
+/* 分享卡:頂端一排琴鍵、金色細線、奶油紙、數字用圓體 */
+[data-skin="studio"] .sharecard { position: relative; padding-top: 42px; overflow: hidden; border: 1px solid var(--paper-line); }
+[data-skin="studio"] .sharecard::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 26px;
+  background: var(--keys) repeat-x; background-size: auto 26px;
+  border-bottom: 2px solid var(--gold);
+}
+[data-skin="studio"] .sharecard .kicker { color: var(--paper-accent); letter-spacing: .06em; }
+[data-skin="studio"] .sharecard .okline { color: #0f7a70; }
+[data-skin="studio"] .sharecard .bigbal, [data-skin="studio"] .sharecard .bigtime,
+[data-skin="studio"] .sharecard .fee b, [data-skin="studio"] .sharecard .when,
+[data-skin="studio"] .sharecard .rno { font-family: var(--num); font-weight: 700; }
+[data-skin="studio"] .sharecard .when, [data-skin="studio"] .sharecard .rno { font-weight: 600; }
+[data-skin="studio"] .sharecard .bigbal { color: #0f7a70; }
+[data-skin="studio"] .sharecard .bigbal.low { color: #d03a2f; }
+[data-skin="studio"] .sharecard .stbl { border-top-color: var(--gold); }
+[data-skin="studio"] .sharecard .sday-h { color: #0f7a70; }
+[data-skin="studio"] .sharecard .sfoot, [data-skin="studio"] .sharecard .signed { border-top-color: var(--paper-line); }
+[data-skin="studio"] .sharecard .accent-line { color: #0f7a70; }
+
+/* 收據與欠堂維持紅;快到期用芥末 */
+[data-skin="studio"] .orange { color: var(--warn); }
+[data-skin="studio"] .sw-btn.teal { background: #0f7a70; }
+[data-skin="studio"] .sw-btn.blue { background: #2f8f84; }
+[data-skin="studio"] .sw-btn.orange { background: #c98612; }
+[data-skin="studio"] .tog input:checked { background: #34b3a3; }
 </style>
 </head>
 <body>
@@ -1388,7 +1529,7 @@ if (typeof module !== "undefined") module.exports = R;
     return { tab: "today",
       stack: { today: [{ v: "today" }], students: [{ v: "students" }], ledger: [{ v: "ledger" }], settings: [{ v: "settings" }] },
       mode: "today", calMonth: new Date(T.getFullYear(), T.getMonth(), 1), calDay: T,
-      teacherName: (ui && ui.teacherName !== undefined) ? ui.teacherName : "王", studio: (ui && ui.studio) || "" };
+      teacherName: (ui && ui.teacherName !== undefined) ? ui.teacherName : "施", studio: (ui && ui.studio) || "" };
   }
   function cur() { var s = ui.stack[ui.tab]; return s[s.length - 1]; }
   function push(v, arg) { ui.stack[ui.tab].push({ v: v, arg: arg }); render(true); }
@@ -1721,7 +1862,7 @@ if (typeof module !== "undefined") module.exports = R;
     var theme = document.documentElement.getAttribute("data-theme") || "system";
     var h = group("老師",
       '<div class="row frow"><input id="setName" data-input="teacherName" value="' + esc(ui.teacherName) +
-      '" placeholder="姓氏或稱呼(例：王)" maxlength="12" aria-label="姓氏或稱呼"></div>' +
+      '" placeholder="姓氏或稱呼(例：施)" maxlength="12" aria-label="姓氏或稱呼"></div>' +
       '<div class="row frow"><input id="setStudio" data-input="studio" value="' + esc(ui.studio) +
       '" placeholder="教室名稱(選填)" maxlength="20" aria-label="教室名稱"></div>' +
       '<div class="row lc dim"><span class="k">回報署名</span><span class="v" id="sigPreview">' + esc(sig()) + "</span></div>");
@@ -1730,8 +1871,10 @@ if (typeof module !== "undefined") module.exports = R;
       "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
     h += group("資料", upcoming("備份到「檔案」", "W5") + upcoming("從備份還原", "W5") + upcoming("載入示範資料", "W5"));
     h += group("關於", lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
+    var skin = document.documentElement.getAttribute("data-skin") || "classic";
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
-      "</div>" + rowBtn("重設示範資料", "undo", "reset"),
+      "</div>" + '<div class="row">' + seg([["studio", "新風格(樣品)"], ["classic", "原本的藍"]], skin, "skin") + "</div>" +
+      rowBtn("重設示範資料", "undo", "reset"),
       "這一區只有網頁示範版有。iOS 版跟著系統的深淺色,分享出去的卡片一律是白紙。");
     return { title: "設定", html: h };
   }
@@ -2467,6 +2610,7 @@ if (typeof module !== "undefined") module.exports = R;
         var th = b.getAttribute("data-v");
         if (th === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", th);
         render(); break;
+      case "skin": document.documentElement.setAttribute("data-skin", b.getAttribute("data-v")); render(); break;
       case "reset": S = seed(); ui = newUi(); closeSheet(); render(true); toast("已重設示範資料"); break;
       case "close": closeSheet(); break;
     }
@@ -2494,6 +2638,7 @@ if (typeof module !== "undefined") module.exports = R;
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
 
+  document.documentElement.setAttribute("data-skin", "studio");   // 美術樣品:預設新風格
   S = seed();
   ui = newUi();
   render(true);
