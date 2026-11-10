@@ -565,6 +565,8 @@
     var skin = document.documentElement.getAttribute("data-skin") || "classic";
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
       "</div>" + '<div class="row">' + seg([["studio", "新風格(樣品)"], ["classic", "原本的藍"]], skin, "skin") + "</div>" +
+      (skin === "studio" ? '<div class="row stack"><span class="cap">按鈕顏色(淺色模式)</span>' +
+        seg([["deep", "深綠白字"], ["bright", "亮薄荷深字"]], document.documentElement.getAttribute("data-tone") || "deep", "tone") + "</div>" : "") +
       rowBtn("重設示範資料", "undo", "reset"),
       "這一區只有網頁示範版有。iOS 版跟著系統的深淺色,分享出去的卡片一律是白紙。");
     return { title: "設定", html: h };
@@ -1301,6 +1303,7 @@
         var th = b.getAttribute("data-v");
         if (th === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", th);
         render(); break;
+      case "tone": document.documentElement.setAttribute("data-tone", b.getAttribute("data-v")); render(); break;
       case "skin": document.documentElement.setAttribute("data-skin", b.getAttribute("data-v")); render(); break;
       case "reset": S = seed(); ui = newUi(); closeSheet(); render(true); toast("已重設示範資料"); break;
       case "close": closeSheet(); break;

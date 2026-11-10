@@ -813,6 +813,20 @@ textarea.csv { margin-top: 4px; border-radius: 14px; border: 0; background: var(
 [data-skin="studio"] .sw-btn.blue { background: #2f8f84; }
 [data-skin="studio"] .sw-btn.orange { background: #c98612; }
 [data-skin="studio"] .tog input:checked { background: #34b3a3; }
+
+/* 比較用:亮薄荷按鈕配深色字(較像 DM)。只影響淺色模式——深色模式本來就是亮綠配深字 */
+:root[data-skin="studio"][data-tone="bright"] { --btn: #66c6ba; --btn-ink: #0a2a26; }
+:root[data-skin="studio"][data-tone="bright"][data-theme="dark"] { --btn: var(--accent); --btn-ink: var(--on-accent); }
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="studio"][data-tone="bright"]:not([data-theme="light"]) { --btn: var(--accent); --btn-ink: var(--on-accent); }
+}
+[data-tone="bright"][data-skin="studio"] .lesson button:not(.bordered),
+[data-tone="bright"][data-skin="studio"] .btns button:not(.bordered),
+[data-tone="bright"][data-skin="studio"] .cal-cell .cal-d.sel { background: var(--btn); color: var(--btn-ink); }
+[data-tone="bright"][data-skin="studio"] button.glass-pro {
+  background: linear-gradient(180deg, color-mix(in srgb, #fff 18%, var(--btn)), var(--btn)); color: var(--btn-ink);
+  border-color: color-mix(in srgb, #fff 25%, var(--btn));
+}
 </style>
 </head>
 <body>
@@ -1874,6 +1888,8 @@ if (typeof module !== "undefined") module.exports = R;
     var skin = document.documentElement.getAttribute("data-skin") || "classic";
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
       "</div>" + '<div class="row">' + seg([["studio", "新風格(樣品)"], ["classic", "原本的藍"]], skin, "skin") + "</div>" +
+      (skin === "studio" ? '<div class="row stack"><span class="cap">按鈕顏色(淺色模式)</span>' +
+        seg([["deep", "深綠白字"], ["bright", "亮薄荷深字"]], document.documentElement.getAttribute("data-tone") || "deep", "tone") + "</div>" : "") +
       rowBtn("重設示範資料", "undo", "reset"),
       "這一區只有網頁示範版有。iOS 版跟著系統的深淺色,分享出去的卡片一律是白紙。");
     return { title: "設定", html: h };
@@ -2610,6 +2626,7 @@ if (typeof module !== "undefined") module.exports = R;
         var th = b.getAttribute("data-v");
         if (th === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", th);
         render(); break;
+      case "tone": document.documentElement.setAttribute("data-tone", b.getAttribute("data-v")); render(); break;
       case "skin": document.documentElement.setAttribute("data-skin", b.getAttribute("data-v")); render(); break;
       case "reset": S = seed(); ui = newUi(); closeSheet(); render(true); toast("已重設示範資料"); break;
       case "close": closeSheet(); break;

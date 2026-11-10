@@ -803,3 +803,17 @@ textarea.csv { margin-top: 4px; border-radius: 14px; border: 0; background: var(
 [data-skin="studio"] .sw-btn.blue { background: #2f8f84; }
 [data-skin="studio"] .sw-btn.orange { background: #c98612; }
 [data-skin="studio"] .tog input:checked { background: #34b3a3; }
+
+/* 比較用:亮薄荷按鈕配深色字(較像 DM)。只影響淺色模式——深色模式本來就是亮綠配深字 */
+:root[data-skin="studio"][data-tone="bright"] { --btn: #66c6ba; --btn-ink: #0a2a26; }
+:root[data-skin="studio"][data-tone="bright"][data-theme="dark"] { --btn: var(--accent); --btn-ink: var(--on-accent); }
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="studio"][data-tone="bright"]:not([data-theme="light"]) { --btn: var(--accent); --btn-ink: var(--on-accent); }
+}
+[data-tone="bright"][data-skin="studio"] .lesson button:not(.bordered),
+[data-tone="bright"][data-skin="studio"] .btns button:not(.bordered),
+[data-tone="bright"][data-skin="studio"] .cal-cell .cal-d.sel { background: var(--btn); color: var(--btn-ink); }
+[data-tone="bright"][data-skin="studio"] button.glass-pro {
+  background: linear-gradient(180deg, color-mix(in srgb, #fff 18%, var(--btn)), var(--btn)); color: var(--btn-ink);
+  border-color: color-mix(in srgb, #fff 25%, var(--btn));
+}
