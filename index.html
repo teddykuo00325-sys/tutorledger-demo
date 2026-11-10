@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="課約:單人家教的堂數帳本。下課一鍵扣堂、家長立刻收到剩餘堂數、月底對帳零爭議。示範版,全是假資料。">
+<style>html,body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+<title>課約 網頁示範</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* 版面:桌機上是一支置中的手機,內容在手機裡捲動,分頁列是浮在內容上方的玻璃。
+   色票對齊 iOS 版:BrandPrimary 淺 #2563EB / 深 #3B82F6 / 高對比淺 #1D4ED8 / 高對比深 #60A5FA。
+   分享卡用獨立的「紙」色票,永遠淺色(對應 App 的 paperDocument)。 */
+:root {
+  --page: #e6e9f0;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f7f7fa;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --line: #e3e5ea;
+  --accent: #2563eb;
+  --accent-soft: #e8effd;
+  --on-accent: #ffffff;
+  --warn: #b45309;
+  --warn-soft: #fdf1e2;
+  --danger: #dc2626;
+  --ok: #15803d;
+  --glass: rgba(255, 255, 255, .62);
+  --glass-strong: rgba(255, 255, 255, .84);
+  --glass-edge: rgba(255, 255, 255, .78);
+  --glass-shadow: 0 10px 30px rgba(15, 23, 42, .14), 0 1px 2px rgba(15, 23, 42, .08);
+  --sheet: rgba(255, 255, 255, .93);
+  --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 12px 32px rgba(15, 23, 42, .10);
+  --paper: #ffffff;
+  --paper-ink: #0f172a;
+  --paper-muted: #64748b;
+  --paper-accent: #2563eb;
+  --paper-line: #e2e8f0;
+  --font-ui: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #050507;
+    --bg: #0b0b0e;
+    --surface: #1c1c1f;
+    --surface-2: #141417;
+    --fg: #f1f5f9;
+    --muted: #94a3b8;
+    --faint: #64748b;
+    --line: #2c2c31;
+    --accent: #3b82f6;
+    --accent-soft: #15233d;
+    --warn: #f59e0b;
+    --warn-soft: #2d220f;
+    --danger: #f87171;
+    --ok: #4ade80;
+    --glass: rgba(46, 46, 52, .55);
+    --glass-strong: rgba(46, 46, 52, .80);
+    --glass-edge: rgba(255, 255, 255, .14);
+    --glass-shadow: 0 10px 30px rgba(0, 0, 0, .55), 0 1px 2px rgba(0, 0, 0, .4);
+    --sheet: rgba(30, 30, 34, .92);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #050507;
+  --bg: #0b0b0e;
+  --surface: #1c1c1f;
+  --surface-2: #141417;
+  --fg: #f1f5f9;
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --line: #2c2c31;
+  --accent: #3b82f6;
+  --accent-soft: #15233d;
+  --warn: #f59e0b;
+  --warn-soft: #2d220f;
+  --danger: #f87171;
+  --ok: #4ade80;
+  --glass: rgba(46, 46, 52, .55);
+  --glass-strong: rgba(46, 46, 52, .80);
+  --glass-edge: rgba(255, 255, 255, .14);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, .55), 0 1px 2px rgba(0, 0, 0, .4);
+  --sheet: rgba(30, 30, 34, .92);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .45);
+  color-scheme: dark;
+}
+/* 「增加對比」:同 iOS 版的高對比色,玻璃也變得不那麼透明 */
+@media (prefers-contrast: more) {
+  :root { --accent: #1d4ed8; --muted: #334155; --line: #c6cad3; --glass: rgba(255, 255, 255, .9); }
+  :root[data-theme="dark"] { --accent: #60a5fa; --muted: #cbd5e1; --line: #45454d; --glass: rgba(46, 46, 52, .92); }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --accent: #60a5fa; --muted: #cbd5e1; --line: #45454d; --glass: rgba(46, 46, 52, .92); }
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--page);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 36px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 700; }
+
+/* 示範橫幅 */
+.banner {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--surface);
+  border-radius: 18px; padding: 13px 15px; margin-bottom: 18px;
+  box-shadow: var(--shadow);
+}
+.banner strong { color: var(--accent); }
+.banner p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+.badge-demo {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  background: var(--accent); color: var(--on-accent); border-radius: 999px;
+  padding: 2px 9px; flex: none; margin-top: 2px;
+}
+
+/* 手機外框:內容在裡面捲動,分頁列浮在上面 */
+.phone {
+  position: relative;
+  background: var(--bg);
+  border-radius: 38px;
+  box-shadow: var(--shadow), 0 0 0 1px var(--line);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  height: 700px;
+}
+@media (max-width: 520px) {
+  .phone { height: max(560px, calc(100dvh - 150px)); border-radius: 30px; }
+}
+.phone-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 18px 8px;
+}
+.phone-top .appname { font-weight: 700; font-size: 26px; letter-spacing: .01em; }
+.screen {
+  padding: 2px 14px 104px; flex: 1;
+  overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.screen::-webkit-scrollbar { display: none; }
+
+.card {
+  background: var(--surface);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.card + .card { margin-top: 12px; }
+.sec-label {
+  font-size: 12px; font-weight: 700; color: var(--faint);
+  letter-spacing: .06em; margin: 20px 4px 7px;
+  display: flex; align-items: center; gap: 6px;
+}
+.sec-label:first-child { margin-top: 4px; }
+
+.datebar {
+  display: flex; justify-content: space-between; align-items: baseline;
+  background: var(--surface);
+  border-radius: 18px; padding: 13px 16px; margin-bottom: 4px;
+}
+.datebar .d { font-weight: 700; font-size: 17px; }
+.datebar .w { color: var(--accent); font-weight: 500; font-size: 14px; }
+
+.row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+}
+.row + .row { border-top: 1px solid var(--line); }
+.row .grow { flex: 1; min-width: 0; }
+.row .nm { font-weight: 500; }
+.row .sub {
+  font-size: 12.5px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.row .sub.low { color: var(--danger); }
+
+/* 按鈕。實心的那種給列表裡每一列的「簽到」——內容層,不用玻璃(同 iOS 版的取捨) */
+button {
+  font: inherit; font-weight: 500; cursor: pointer;
+  border-radius: 999px; border: 1px solid transparent;
+  padding: 7px 16px; background: var(--accent); color: var(--on-accent);
+  flex: none;
+}
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.ghost { background: var(--accent-soft); color: var(--accent); }
+button.quiet { background: transparent; color: var(--muted); padding: 7px 9px; }
+button[disabled] { opacity: .45; cursor: default; }
+button.sm { font-size: 13px; padding: 5px 12px; }
+
+/* Liquid Glass。只給最重要的功能元素:分頁列、分享面板的主要動作、工具列按鈕 */
+.glass, .tabs, .toast {
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+button.glass {
+  background: var(--glass-strong); color: var(--accent);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), var(--glass-shadow);
+}
+button.glass-pro {
+  background: linear-gradient(180deg, color-mix(in srgb, #fff 14%, var(--accent)), var(--accent));
+  color: var(--on-accent);
+  border: 1px solid color-mix(in srgb, #fff 22%, var(--accent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .38), inset 0 -1px 0 rgba(0, 0, 0, .12),
+              0 8px 20px color-mix(in srgb, var(--accent) 32%, transparent);
+  font-weight: 700;
+}
+
+.done { color: var(--ok); font-weight: 500; font-size: 14px; flex: none; }
+.skipped { color: var(--muted); font-weight: 500; font-size: 14px; flex: none; }
+
+.conflict {
+  background: var(--warn-soft);
+  border-radius: 18px; padding: 11px 14px;
+}
+.conflict .t { font-weight: 700; color: var(--warn); font-size: 14px; }
+.conflict .s { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.kv + .kv { border-top: 1px solid var(--line); }
+.kv .k { color: var(--fg); }
+.kv .note { display: block; font-size: 12px; color: var(--muted); }
+.kv .v { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kv .v.warn { color: var(--warn); }
+.kv .v.danger { color: var(--danger); }
+
+.pill {
+  font-size: 12px; font-weight: 700; border-radius: 999px;
+  padding: 2px 10px; flex: none; font-variant-numeric: tabular-nums;
+}
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.danger { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.pill.cls { background: var(--accent-soft); color: var(--accent); }
+
+.empty { padding: 14px 16px; color: var(--muted); font-size: 13.5px; }
+
+/* 分頁列:浮在內容上方的玻璃膠囊,內容捲到它底下 */
+.tabs {
+  position: absolute; left: 14px; right: 14px; bottom: 14px;
+  display: flex; padding: 5px; gap: 4px;
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), var(--glass-shadow);
+}
+.tabs button {
+  flex: 1; background: transparent; color: var(--fg);
+  border: 0; border-radius: 999px; padding: 6px 0 5px;
+  font-size: 11px; font-weight: 500;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.tabs button[aria-current="true"] {
+  color: var(--accent); font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+}
+.tabs svg {
+  width: 23px; height: 23px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* 分享面板 */
+.sheet-back {
+  position: fixed; inset: 0; background: rgba(8, 10, 16, .42);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 40; padding: 10px;
+}
+.sheet {
+  background: var(--sheet);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid var(--glass-edge);
+  border-radius: 32px; width: 100%; max-width: 480px;
+  padding: 18px; max-height: 88vh; overflow: auto;
+  box-shadow: var(--glass-shadow);
+  padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.sheet h3 { font-size: 20px; margin: 2px 2px 12px; }
+
+/* 分享卡是紙:不跟深色模式走,老師看到的等於家長收到的(同 App 的 paperDocument) */
+.sharecard {
+  background: var(--paper); color: var(--paper-ink);
+  border-radius: 18px; padding: 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .14);
+}
+.sharecard .kicker { font-size: 12px; font-weight: 700; color: var(--paper-accent); margin-bottom: 4px; }
+.sharecard .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sharecard .who { font-weight: 700; font-size: 17px; }
+.sharecard .when { font-size: 12px; color: var(--paper-muted); font-variant-numeric: tabular-nums; }
+.sharecard .msg { margin: 10px 0 0; font-size: 14px; line-height: 1.75; }
+.sharecard .bal {
+  margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--paper-line);
+  display: flex; justify-content: space-between; font-variant-numeric: tabular-nums;
+}
+.sharecard .bal b { font-size: 18px; }
+.sheet-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.sheet-actions button { flex: 1 1 auto; padding-block: 11px; }
+.privacy {
+  margin-top: 12px; font-size: 12.5px; color: var(--muted);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  border-radius: 14px; padding: 10px 12px;
+}
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--fg) 86%, transparent); color: var(--bg);
+  padding: 9px 17px; border-radius: 999px; font-size: 13.5px; font-weight: 500;
+  z-index: 60; box-shadow: var(--glass-shadow);
+}
+
+/* 說明區 */
+.notes { margin-top: 24px; }
+.notes h2 { font-size: 15px; margin-bottom: 8px; }
+.notes ul { margin: 0 0 14px; padding-left: 1.15em; color: var(--muted); font-size: 13.5px; }
+.notes li { margin-bottom: 5px; }
+.notes li b { color: var(--fg); font-weight: 500; }
+.foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+/* 「降低透明度」:玻璃改回實心,同 Apple 對 Liquid Glass 的要求 */
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .tabs, .toast, .sheet {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .tabs, button.glass { background: var(--surface); }
+  .sheet { background: var(--surface); }
+  .toast { background: var(--fg); }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner">
+    <span class="badge-demo">示範</span>
+    <div>
+      <strong>課約 —— 單人家教的堂數帳本</strong>
+      <p><b>下課一鍵扣堂 → 家長立刻收到剩餘堂數 → 月底對帳零爭議。</b>
+        給自己接案、自己排課、自己收錢的家教老師用，家長端不必裝任何東西。</p>
+      <p>這是網頁示範版，學生與金額<b>全是假資料</b>，不會上傳到任何地方，重新整理就復原。
+        真正的 App 是 iOS 原生版，資料只留在老師手機上。</p>
+    </div>
+  </div>
+
+  <div class="phone">
+    <div class="phone-top">
+      <span class="appname">課約</span>
+      <button class="glass sm" id="themeBtn" type="button">切換深色</button>
+    </div>
+    <div class="screen">
+      <div id="viewToday"></div>
+      <div id="viewStudents" hidden></div>
+      <div id="viewLedger" hidden></div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button type="button" data-tab="today" aria-current="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg>今日</button>
+      <button type="button" data-tab="students"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c0-3.3 2.7-5.6 6-5.6s6 2.3 6 5.6"/><circle cx="17.2" cy="9" r="2.5"/><path d="M15.6 14.1c3 .2 5.4 2.2 5.4 5"/></svg>學生</button>
+      <button type="button" data-tab="ledger"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.6"/><path d="M9 4.6h6M8.6 10h6.8M8.6 14h6.8M8.6 18h4"/></svg>對帳</button>
+    </nav>
+  </div>
+
+  <div class="notes">
+    <h2>這個示範可以做什麼</h2>
+    <ul>
+      <li><b>跟著系統外觀</b>:深色模式、「增加對比」、「降低透明度」都會套用,和 iOS 版一致。分享出去的卡片例外——它一律是白紙,老師看到的就是家長收到的。</li>
+      <li><b>下課一鍵扣堂</b>：按「簽到」會真的從堂數包扣一堂，剩餘堂數與對帳數字同步變動。</li>
+      <li><b>請假不扣堂</b>：請假與老師取消都不扣——這是規則，不是設定。</li>
+      <li><b>課後回報卡</b>：簽到後跳出要傳給家長的卡片，文字句型與真 App 相同。</li>
+      <li><b>團班價格跟著班走</b>：17:00 那堂兩位學生一起上，認列用班級單價，不是各自的單價。</li>
+      <li><b>到期與續費提示</b>：對帳頁會指名道姓列出快到期、已過期、該續費的人。</li>
+    </ul>
+    <h2>刻意沒做的事</h2>
+    <ul>
+      <li>不做帳號、不做家長端、不上傳任何資料。設計書要求兒少個資全部留在老師手機。</li>
+      <li>分享給家長的卡片<b>不放電話</b>，課前提醒也<b>一位學生一張</b>——圖片會被轉傳。</li>
+      <li>這個網頁的計算是<b>簡化重寫</b>的示範。真正的規則在 iOS 版的 LedgerCore，有 219 條測試守著；
+        網頁版只是給你摸流程用的，兩邊不共用程式碼。</li>
+    </ul>
+    <h2>給試用的你</h2>
+    <ul>
+      <li>放心亂按，壞不了。想從頭來過就按下面的「重設示範資料」。</li>
+      <li>最想聽的回饋：<b>哪一步讓你猶豫</b>、<b>哪個數字你看不懂</b>、
+        還有<b>你現在是用什麼在記堂數</b>。</li>
+      <li>回饋直接回給傳連結給你的人就好。這個頁面沒有表單、沒有帳號，
+        也不會記錄你做了什麼。</li>
+    </ul>
+    <div class="foot">
+      <button class="ghost" id="resetBtn" type="button">重設示範資料</button>
+    </div>
+  </div>
+</div>
+
+<div id="sheetHost"></div>
+<div id="toastHost"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CLASS_KIDS = "kids";
+
+  function seed() {
+    var today = new Date();
+    function day(n) {
+      var d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      d.setDate(d.getDate() + n);
+      return d;
+    }
+    return {
+      teacher: "王",
+      studio: "",
+      today: today,
+      classes: [{ id: CLASS_KIDS, name: "兒童鋼琴班", price: 600, start: "17:00", end: "18:00" }],
+      students: [
+        { id: "an", name: "小安", guardian: "媽媽", subject: "鋼琴", price: 800 },
+        { id: "kai", name: "阿凱", guardian: "爸爸", subject: "小提琴", price: 900 },
+        { id: "you", name: "宥宥", guardian: "媽媽", subject: "鋼琴", price: 600 },
+        { id: "yu", name: "家瑜", guardian: "媽媽", subject: "鋼琴", price: 600 },
+        { id: "bo", name: "小柏", guardian: "媽媽", subject: "鋼琴", price: 800 }
+      ],
+      // used = 已上掉的堂數;expires = null 表示沒有效期
+      packages: [
+        { id: "p1", student: "an", total: 10, paid: 8000, used: 7, expires: day(45), thisMonth: true, classId: null },
+        { id: "p2", student: "kai", total: 10, paid: 9000, used: 3, expires: day(18), thisMonth: false, classId: null },
+        { id: "p3", student: "you", total: 8, paid: 4800, used: 3, expires: null, thisMonth: true, classId: CLASS_KIDS },
+        { id: "p4", student: "yu", total: 10, paid: 6000, used: 9, expires: null, thisMonth: false, classId: CLASS_KIDS },
+        { id: "p5", student: "bo", total: 10, paid: 8000, used: 8, expires: day(-5), thisMonth: false, classId: null }
+      ],
+      // 今天的課表。classId 有值就是團班,價格跟著班走。
+      lessons: [
+        { id: "l1", start: "16:00", end: "17:00", classId: null, members: ["an"] },
+        { id: "l2", start: "17:00", end: "18:00", classId: CLASS_KIDS, members: ["you", "yu"] },
+        { id: "l3", start: "19:00", end: "20:00", classId: null, members: ["kai"] }
+      ],
+      // 本月先前已認列的收入(示範的起始值),單位:元
+      recognizedBefore: 7100,
+      attendedBefore: 10,
+      // 這次操作產生的紀錄:{lessonId, studentId, status, price, packageId}
+      records: []
+    };
+  }
+
+  var S = seed();
+
+  // ---- 規則(簡化自 LedgerCore) ----
+
+  function student(id) {
+    for (var i = 0; i < S.students.length; i++) if (S.students[i].id === id) return S.students[i];
+    return null;
+  }
+  function klass(id) {
+    for (var i = 0; i < S.classes.length; i++) if (S.classes[i].id === id) return S.classes[i];
+    return null;
+  }
+  function startOfToday() {
+    return new Date(S.today.getFullYear(), S.today.getMonth(), S.today.getDate());
+  }
+  function isExpired(pkg) {
+    return !!pkg.expires && pkg.expires < S.today;
+  }
+  function remainingOf(pkg) {
+    return Math.max(0, pkg.total - pkg.used);
+  }
+  /** 可用堂數:未過期的包才算得上 */
+  function spendable(studentId) {
+    var n = 0;
+    S.packages.forEach(function (p) {
+      if (p.student === studentId && !isExpired(p)) n += remainingOf(p);
+    });
+    return n;
+  }
+  /** 選要扣的包:綁這個班的優先,其次通用;未過期、還有餘額;最早到期先扣 */
+  function pickPackage(studentId, classId) {
+    var cands = S.packages.filter(function (p) {
+      if (p.student !== studentId) return false;
+      if (isExpired(p)) return false;
+      if (remainingOf(p) <= 0) return false;
+      return p.classId === null || p.classId === classId;
+    });
+    cands.sort(function (a, b) {
+      var am = (a.classId !== null && a.classId === classId) ? 0 : 1;
+      var bm = (b.classId !== null && b.classId === classId) ? 0 : 1;
+      if (am !== bm) return am - bm;
+      var ae = a.expires ? a.expires.getTime() : Infinity;
+      var be = b.expires ? b.expires.getTime() : Infinity;
+      return ae - be;
+    });
+    return cands[0] || null;
+  }
+  /** 這一堂的認列單價:團班用班級單價——價格跟著班走 */
+  function unitPrice(studentId, classId) {
+    if (classId) { var c = klass(classId); if (c) return c.price; }
+    var st = student(studentId);
+    return st ? st.price : 0;
+  }
+  function recordFor(lessonId, studentId) {
+    for (var i = 0; i < S.records.length; i++) {
+      if (S.records[i].lessonId === lessonId && S.records[i].studentId === studentId) return S.records[i];
+    }
+    return null;
+  }
+  function consumedAmount(pkg) {
+    if (pkg.total <= 0 || pkg.used <= 0) return 0;
+    var used = Math.min(pkg.used, pkg.total);
+    return Math.round(pkg.paid * used / pkg.total);
+  }
+
+  function attend(lessonId, studentId, classId) {
+    if (recordFor(lessonId, studentId)) return;
+    var pkg = pickPackage(studentId, classId);
+    var price = unitPrice(studentId, classId);
+    if (pkg) pkg.used += 1;
+    S.records.push({
+      lessonId: lessonId, studentId: studentId, status: "attended",
+      price: price, packageId: pkg ? pkg.id : null
+    });
+    render();
+    if (!pkg) {
+      toast(student(studentId).name + " 沒有可用的堂數包,這堂記為欠堂");
+    }
+    openCard(studentId, lessonId, classId);
+  }
+  function mark(lessonId, studentId, status) {
+    if (recordFor(lessonId, studentId)) return;
+    S.records.push({ lessonId: lessonId, studentId: studentId, status: status, price: 0, packageId: null });
+    render();
+    toast(status === "leave" ? "已記為請假,不扣堂" : "已記為老師取消,不扣堂");
+  }
+  function undo(lessonId, studentId) {
+    var i = -1;
+    for (var k = 0; k < S.records.length; k++) {
+      if (S.records[k].lessonId === lessonId && S.records[k].studentId === studentId) { i = k; break; }
+    }
+    if (i < 0) return;
+    var r = S.records[i];
+    if (r.status === "attended" && r.packageId) {
+      S.packages.forEach(function (p) { if (p.id === r.packageId) p.used = Math.max(0, p.used - 1); });
+    }
+    S.records.splice(i, 1);
+    render();
+    toast("已撤銷");
+  }
+
+  /** 到期提示:快到期或已過期、而且還有剩餘堂數的包 */
+  function expiringPackages(withinDays) {
+    var limit = withinDays === undefined ? 30 : withinDays;
+    var t0 = startOfToday();
+    var out = [];
+    S.packages.forEach(function (p) {
+      if (!p.expires) return;
+      var rem = remainingOf(p);
+      if (rem <= 0) return;
+      var e0 = new Date(p.expires.getFullYear(), p.expires.getMonth(), p.expires.getDate());
+      var daysLeft = Math.round((e0 - t0) / 86400000);
+      var forfeited = isExpired(p);
+      if (!forfeited && daysLeft > limit) return;
+      out.push({
+        pkg: p, remaining: rem, daysLeft: daysLeft, forfeited: forfeited,
+        deferred: p.paid - consumedAmount(p)
+      });
+    });
+    out.sort(function (a, b) { return a.pkg.expires - b.pkg.expires; });
+    return out;
+  }
+  /** 需要提醒續費:可用堂數 <= 2(與 App 的門檻相同) */
+  function needsRenewal() {
+    return S.students.filter(function (st) { return spendable(st.id) <= 2; });
+  }
+
+  function monthRecognized() {
+    var n = S.recognizedBefore;
+    S.records.forEach(function (r) { if (r.status === "attended") n += r.price; });
+    return n;
+  }
+  function monthAttendedCount() {
+    var n = S.attendedBefore;
+    S.records.forEach(function (r) { if (r.status === "attended") n += 1; });
+    return n;
+  }
+  function monthCollected() {
+    var n = 0;
+    S.packages.forEach(function (p) { if (p.thisMonth) n += p.paid; });
+    return n;
+  }
+  function totalLiability() {
+    var n = 0;
+    S.packages.forEach(function (p) { if (!isExpired(p)) n += (p.paid - consumedAmount(p)); });
+    return n;
+  }
+  function forfeitedAmount() {
+    var n = 0;
+    S.packages.forEach(function (p) { if (isExpired(p)) n += (p.paid - consumedAmount(p)); });
+    return n;
+  }
+
+  // ---- 文案(照 ReportTemplate 的句型) ----
+
+  function salutation(st) {
+    if (!st.guardian) return st.name + "的家長";
+    if (st.guardian.indexOf(st.name) >= 0) return st.guardian;
+    return st.name + st.guardian;
+  }
+  function signature() {
+    return S.studio ? "— " + S.studio + " " + S.teacher + " 老師" : "— " + S.teacher + " 老師";
+  }
+  function reportText(st, classId) {
+    var what = classId ? (klass(classId) || {}).name : st.subject + "課";
+    var parts = [];
+    parts.push(salutation(st) + "您好：今天" + what + "練習了音階與上週的曲子。");
+    parts.push("節奏比上週穩，表現很棒!");
+    parts.push("左手還需要再放鬆一點，我們下週會再加強。");
+    parts.push("回家練習：每天慢速兩遍。");
+    parts.push(signature());
+    return parts.join("");
+  }
+
+  // ---- 畫面 ----
+
+  var WEEK = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+  function money(n) { return "NT$" + n.toLocaleString("en-US"); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function dateText(d) {
+    return d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日";
+  }
+
+  function renderToday() {
+    var h = "";
+    h += '<div class="datebar"><span class="d">' + dateText(S.today) + "</span>" +
+         '<span class="w">' + WEEK[S.today.getDay()] + "</span></div>";
+
+    S.lessons.forEach(function (ls) {
+      var c = ls.classId ? klass(ls.classId) : null;
+      h += '<div class="sec-label">' + ls.start +
+           (c ? ' <span class="pill cls">' + esc(c.name) + "</span>" : "") +
+           (ls.members.length > 1 ? " · " + ls.members.length + " 位一起上" : "") +
+           "</div>";
+      h += '<div class="card">';
+      ls.members.forEach(function (sid) {
+        var st = student(sid);
+        var rec = recordFor(ls.id, sid);
+        var rem = spendable(sid);
+        var sub = ls.start + "–" + ls.end + " · 剩 " + rem + " 堂";
+        h += '<div class="row">';
+        h += '<div class="grow"><div class="nm">' + esc(st.name) + "</div>" +
+             '<div class="sub' + (rem <= 2 ? " low" : "") + '">' + sub + "</div></div>";
+        if (!rec) {
+          h += '<button class="sm" data-act="attend" data-l="' + ls.id + '" data-s="' + sid + '">簽到</button>';
+          h += '<button class="quiet sm" data-act="leave" data-l="' + ls.id + '" data-s="' + sid + '">請假</button>';
+        } else if (rec.status === "attended") {
+          h += '<span class="done">已上課 ✓</span>';
+          h += '<button class="quiet sm" data-act="card" data-l="' + ls.id + '" data-s="' + sid + '">卡片</button>';
+          h += '<button class="quiet sm" data-act="undo" data-l="' + ls.id + '" data-s="' + sid + '">撤銷</button>';
+        } else {
+          h += '<span class="skipped">' + (rec.status === "leave" ? "請假" : "老師取消") + "</span>";
+          h += '<button class="quiet sm" data-act="undo" data-l="' + ls.id + '" data-s="' + sid + '">撤銷</button>';
+        }
+        h += "</div>";
+      });
+      h += "</div>";
+    });
+    document.getElementById("viewToday").innerHTML = h;
+  }
+
+  function renderStudents() {
+    var h = '<div class="sec-label">在籍學生</div><div class="card">';
+    S.students.forEach(function (st) {
+      var rem = spendable(st.id);
+      var pkgs = S.packages.filter(function (p) { return p.student === st.id; });
+      var detail = pkgs.map(function (p) {
+        var bits = p.total + " 堂 " + money(p.paid) + " · 剩 " + remainingOf(p);
+        if (p.classId) bits += " · 綁" + (klass(p.classId) || {}).name;
+        if (p.expires) bits += " · 效期至 " + dateText(p.expires);
+        if (isExpired(p)) bits += "(已過期作廢)";
+        return bits;
+      }).join("<br>");
+      h += '<div class="row"><div class="grow">' +
+           '<div class="nm">' + esc(st.name) + " · " + esc(st.subject) + "</div>" +
+           '<div class="sub">' + detail + "</div></div>" +
+           '<span class="pill ' + (rem <= 2 ? "danger" : "cls") + '">剩 ' + rem + " 堂</span></div>";
+    });
+    h += "</div>";
+    h += '<div class="empty">堂數包、收據、退費、每週時段這些在 iOS 版裡都在學生詳情頁；' +
+         '這個示範只顯示堂數,讓你看扣堂怎麼走。</div>';
+    document.getElementById("viewStudents").innerHTML = h;
+  }
+
+  function renderLedger() {
+    var rec = monthRecognized();
+    var col = monthCollected();
+    var h = '<div class="sec-label">' + (S.today.getMonth() + 1) + " 月 總計</div><div class=\"card\">";
+    h += '<div class="kv"><span class="k">收款<span class="note">這個月買包的金額</span></span>' +
+         '<span class="v">' + money(col) + "</span></div>";
+    h += '<div class="kv"><span class="k">認列收入<span class="note">這個月上掉的課,真正賺到的</span></span>' +
+         '<span class="v">' + money(rec) + "</span></div>";
+    h += '<div class="kv"><span class="k">上課</span><span class="v">' +
+         monthAttendedCount() + " 堂</span></div>";
+    h += "</div>";
+
+    h += '<div class="sec-label">累計</div><div class="card">';
+    h += '<div class="kv"><span class="k">預收未消耗<span class="note">已收錢但課還沒上,這是負債</span></span>' +
+         '<span class="v">' + money(totalLiability()) + "</span></div>";
+    var forf = forfeitedAmount();
+    if (forf > 0) {
+      h += '<div class="kv"><span class="k">已作廢<span class="note">包過期、課沒上完</span></span>' +
+           '<span class="v warn">' + money(forf) + "</span></div>";
+    }
+    h += "</div>";
+
+    var exp = expiringPackages();
+    if (exp.length) {
+      h += '<div class="sec-label">堂數包即將到期</div><div class="card">';
+      exp.forEach(function (e) {
+        var st = student(e.pkg.student);
+        var badge = e.forfeited
+          ? (e.daysLeft === 0 ? "已過期" : "過期 " + (-e.daysLeft) + " 天")
+          : (e.daysLeft === 0 ? "今天到期" : "剩 " + e.daysLeft + " 天");
+        h += '<div class="row"><div class="grow">' +
+             '<div class="nm">' + esc(st.name) + "</div>" +
+             '<div class="sub">剩 ' + e.remaining + " 堂 · " + money(e.deferred) +
+             " · 效期至 " + dateText(e.pkg.expires) + "</div></div>" +
+             '<span class="pill ' + (e.forfeited ? "danger" : "warn") + '">' + badge + "</span></div>";
+      });
+      h += "</div>";
+      h += '<div class="empty">時間過了這些課就作廢。延期、續購或退費都可以，但總得有個了結。</div>';
+    }
+
+    var ren = needsRenewal();
+    h += '<div class="sec-label">需要提醒續費</div><div class="card">';
+    if (!ren.length) {
+      h += '<div class="empty">目前沒有</div>';
+    } else {
+      ren.forEach(function (st) {
+        h += '<div class="row"><div class="grow"><div class="nm">' + esc(st.name) + "</div>" +
+             '<div class="sub">可用堂數已經很少</div></div>' +
+             '<span class="pill danger">剩 ' + spendable(st.id) + " 堂</span></div>";
+      });
+    }
+    h += "</div>";
+    document.getElementById("viewLedger").innerHTML = h;
+  }
+
+  function render() {
+    renderToday();
+    renderStudents();
+    renderLedger();
+  }
+
+  // ---- 分享卡 ----
+
+  function openCard(studentId, lessonId, classId) {
+    var st = student(studentId);
+    var rem = spendable(studentId);
+    var msg = reportText(st, classId);
+    var host = document.getElementById("sheetHost");
+    host.innerHTML =
+      '<div class="sheet-back" id="sheetBack"><div class="sheet" role="dialog" aria-label="課後回報卡">' +
+        "<h3>課後回報卡</h3>" +
+        '<div class="sharecard">' +
+          '<div class="kicker">' + esc(st.subject) + '課後回報</div>' +
+          '<div class="top"><span class="who">' + esc(salutation(st)) + "</span>" +
+          '<span class="when">' + dateText(S.today) + "</span></div>" +
+          '<p class="msg">' + esc(msg) + "</p>" +
+          '<div class="bal"><span>上完這堂後剩餘</span><b>' + rem + " 堂</b></div>" +
+        "</div>" +
+        '<div class="privacy">卡片上<b>不放電話</b>，也不會出現其他學生的名字——' +
+          "圖片會被轉傳，所以課前提醒是一位學生一張，不做全班總表。</div>" +
+        '<div class="sheet-actions">' +
+          '<button class="glass-pro" id="copyBtn" type="button">複製文字</button>' +
+          '<button class="glass" id="closeBtn" type="button">關閉</button>' +
+        "</div>" +
+      "</div></div>";
+
+    document.getElementById("closeBtn").onclick = closeCard;
+    document.getElementById("sheetBack").onclick = function (e) {
+      if (e.target.id === "sheetBack") closeCard();
+    };
+    document.getElementById("copyBtn").onclick = function () {
+      try {
+        navigator.clipboard.writeText(msg).then(function () {
+          toast("已複製,可以直接貼到 LINE");
+        }, function () { selectFallback(); });
+      } catch (err) { selectFallback(); }
+    };
+    function selectFallback() {
+      var p = host.querySelector(".msg");
+      var r = document.createRange();
+      r.selectNodeContents(p);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      toast("已選取文字,請手動複製");
+    }
+  }
+  function closeCard() { document.getElementById("sheetHost").innerHTML = ""; }
+
+  var toastTimer = null;
+  function toast(text) {
+    var host = document.getElementById("toastHost");
+    host.innerHTML = '<div class="toast">' + esc(text) + "</div>";
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { host.innerHTML = ""; }, 2600);
+  }
+
+  // ---- 互動 ----
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-act]") : null;
+    if (!b) return;
+    var act = b.getAttribute("data-act");
+    var lid = b.getAttribute("data-l");
+    var sid = b.getAttribute("data-s");
+    var ls = null;
+    S.lessons.forEach(function (x) { if (x.id === lid) ls = x; });
+    if (act === "attend") attend(lid, sid, ls ? ls.classId : null);
+    else if (act === "leave") mark(lid, sid, "leave");
+    else if (act === "undo") undo(lid, sid);
+    else if (act === "card") openCard(sid, lid, ls ? ls.classId : null);
+  });
+
+  document.getElementById("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-tab]") : null;
+    if (!b) return;
+    var tab = b.getAttribute("data-tab");
+    ["today", "students", "ledger"].forEach(function (t) {
+      var id = "view" + t.charAt(0).toUpperCase() + t.slice(1);
+      document.getElementById(id).hidden = (t !== tab);
+    });
+    Array.prototype.forEach.call(this.querySelectorAll("button[data-tab]"), function (x) {
+      x.setAttribute("aria-current", x === b ? "true" : "false");
+    });
+  });
+
+  document.getElementById("resetBtn").onclick = function () {
+    S = seed();
+    closeCard();
+    render();
+    toast("已重設示範資料");
+  };
+
+  document.getElementById("themeBtn").onclick = function () {
+    var root = document.documentElement;
+    var dark = root.getAttribute("data-theme") === "dark"
+      || (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+    this.textContent = dark ? "切換深色" : "切換淺色";
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
