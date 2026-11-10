@@ -1,0 +1,60 @@
+<div class="wrap">
+  <div class="banner">
+    <span class="badge-demo">示範</span>
+    <div>
+      <strong>課約 —— 單人家教的堂數帳本</strong>
+      <p><b>下課一鍵扣堂 → 家長立刻收到剩餘堂數 → 月底對帳零爭議。</b>
+        給自己接案、自己排課、自己收錢的家教老師用，家長端不必裝任何東西。</p>
+      <p>這是網頁示範版，學生與金額<b>全是假資料</b>，不會上傳到任何地方，重新整理就復原。
+        真正的 App 是 iOS 原生版，資料只留在老師手機上。</p>
+    </div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="navbar">
+      <div class="nav-l" id="navLeft"></div>
+      <div class="nav-r" id="navRight"></div>
+    </div>
+    <div class="screen" id="screen"></div>
+    <nav class="tabs" id="tabs" aria-label="分頁">
+      <button type="button" data-tab="today" aria-current="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg>今日</button>
+      <button type="button" data-tab="students"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c0-3.3 2.7-5.6 6-5.6s6 2.3 6 5.6"/><circle cx="17.2" cy="9" r="2.5"/><path d="M15.6 14.1c3 .2 5.4 2.2 5.4 5"/></svg>學生</button>
+      <button type="button" data-tab="ledger"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.6"/><path d="M9 4.6h6M8.6 10h6.8M8.6 14h6.8M8.6 18h4"/></svg>對帳</button>
+      <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/></svg>設定</button>
+    </nav>
+  </div>
+
+  <div class="notes">
+    <h2>這個示範可以做什麼</h2>
+    <ul>
+      <li><b>今日課與簽到</b>：按「簽到」真的會從堂數包扣一堂，剩餘堂數與對帳數字同步變動。請假與老師取消不扣。</li>
+      <li><b>課後回報卡與手寫簽名</b>：一對一課簽到後直接跳出卡片，可以請家長在畫面上簽名。</li>
+      <li><b>課前提醒小卡</b>（今日頁右上角的鈴鐺）：一位學生一張，不做全班總表。</li>
+      <li><b>月曆與待確認清單</b>：過去的日子可以補登；已經過了時間卻沒登記的課會浮上來。</li>
+      <li><b>團班</b>：同時段多位學生一起上，價格跟著班走；班裡有全班總表。</li>
+      <li><b>外聘老師</b>：拆帳（鐘點或比例）、應付與結算，以及傳給老師的課表圖卡。</li>
+      <li><b>堂數包、教材、收據、退費</b>：收據分開記繳費日期與實際收費日期，教材費當月即認列。</li>
+      <li><b>體驗課</b>：不扣堂，以體驗價認列。<b>教過的學生</b>：封存之後歷史紀錄仍在。</li>
+      <li><b>排課衝突與到期提示</b>：部分重疊、同一人被排兩次會警告；快到期或已過期的堂數包會指名道姓列出來。</li>
+      <li><b>跟著系統外觀</b>：深色模式、「增加對比」、「降低透明度」都會套用。分享出去的卡片例外，一律是白紙。</li>
+    </ul>
+    <h2>刻意沒做的事</h2>
+    <ul>
+      <li>不做帳號、不做家長端、不上傳任何資料。設計書要求兒少個資全部留在老師手機。</li>
+      <li>分享給家長的卡片<b>不放電話</b>——圖片會被轉傳。電話只在 App 裡看得到。</li>
+      <li>這個網頁的計算是<b>簡化重寫</b>的示範。真正的規則在 iOS 版的 LedgerCore，有 219 條測試守著；
+        網頁版另有 55 條規則測試，但兩邊不共用程式碼。</li>
+      <li>網頁版的匯出是 CSV；iOS 版匯出的是 Excel（八張工作表）。</li>
+    </ul>
+    <h2>給試用的你</h2>
+    <ul>
+      <li>放心亂按，壞不了。想從頭來過就到「設定」按「重設示範資料」。</li>
+      <li>最想聽的回饋：<b>哪一步讓你猶豫</b>、<b>哪個數字你看不懂</b>、
+        還有<b>你現在是用什麼在記堂數</b>。</li>
+      <li>回饋直接回給傳連結給你的人就好。這個頁面沒有表單、沒有帳號，也不會記錄你做了什麼。</li>
+    </ul>
+  </div>
+</div>
+
+<div id="sheetHost"></div>
+<div id="toastHost"></div>
