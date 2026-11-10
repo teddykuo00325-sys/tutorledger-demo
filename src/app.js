@@ -569,10 +569,8 @@
       "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
     h += group("資料", upcoming("備份到「檔案」", "W5") + upcoming("從備份還原", "W5") + upcoming("載入示範資料", "W5"));
     h += group("關於", rowBtn("功能教學", "question", "guide") + lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
-    var skin = document.documentElement.getAttribute("data-skin") || "classic";
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
-      "</div>" + '<div class="row">' + seg([["studio", "新風格(樣品)"], ["classic", "原本的藍"]], skin, "skin") + "</div>" +
-      rowBtn("重設示範資料", "undo", "reset"),
+      "</div>" + rowBtn("重設示範資料", "undo", "reset"),
       "這一區只有網頁示範版有。iOS 版跟著系統的深淺色,分享出去的卡片一律是白紙。");
     return { title: "設定", html: h };
   }
@@ -1371,7 +1369,6 @@
         var th = b.getAttribute("data-v");
         if (th === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", th);
         render(); break;
-      case "skin": document.documentElement.setAttribute("data-skin", b.getAttribute("data-v")); render(); break;
       case "reset": S = seed(); ui = newUi(); closeSheet(); render(true); toast("已重設示範資料"); break;
       case "close": closeSheet(); break;
     }
@@ -1399,7 +1396,9 @@
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
 
-  document.documentElement.setAttribute("data-skin", "studio");   // 美術樣品:預設新風格
+  // 配色取自一間音樂教室(對方同意參考):薄荷綠、奶油白、芥末黃、珊瑚粉、琴鍵、金線。
+  // 樣式都掛在 data-skin="studio" 底下,原本的藍色是沒有這個屬性時的樣子。
+  document.documentElement.setAttribute("data-skin", "studio");
   S = seed();
   ui = newUi();
   render(true);

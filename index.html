@@ -884,6 +884,7 @@ textarea.csv { margin-top: 4px; border-radius: 14px; border: 0; background: var(
     <h2>給試用的你</h2>
     <ul>
       <li><b>畫面照 iOS 版排</b>：區塊順序、說明文字、按鈕位置與手勢都對照 App 的原始碼，看到的就是 App 的樣子。</li>
+      <li><b>功能教學</b>：今日頁左上角的問號，每項功能都有步驟清單。</li>
       <li>放心亂按，壞不了。想從頭來過就到「設定」按「重設示範資料」。</li>
       <li><b>跟 App 一樣的手勢</b>：今日頁<b>長按</b>學生可以記請假或老師取消；列表<b>左右滑動</b>可以叫出動作——上課紀錄左滑「撤銷」、堂數包右滑「收據」、老師左滑「課表」、團班成員左滑「退班」。用滑鼠的話，按住拖曳也一樣。</li>
       <li>最想聽的回饋：<b>哪一步讓你猶豫</b>、<b>哪個數字你看不懂</b>、
@@ -1894,10 +1895,8 @@ if (typeof module !== "undefined") module.exports = R;
       "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
     h += group("資料", upcoming("備份到「檔案」", "W5") + upcoming("從備份還原", "W5") + upcoming("載入示範資料", "W5"));
     h += group("關於", rowBtn("功能教學", "question", "guide") + lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
-    var skin = document.documentElement.getAttribute("data-skin") || "classic";
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
-      "</div>" + '<div class="row">' + seg([["studio", "新風格(樣品)"], ["classic", "原本的藍"]], skin, "skin") + "</div>" +
-      rowBtn("重設示範資料", "undo", "reset"),
+      "</div>" + rowBtn("重設示範資料", "undo", "reset"),
       "這一區只有網頁示範版有。iOS 版跟著系統的深淺色,分享出去的卡片一律是白紙。");
     return { title: "設定", html: h };
   }
@@ -2696,7 +2695,6 @@ if (typeof module !== "undefined") module.exports = R;
         var th = b.getAttribute("data-v");
         if (th === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", th);
         render(); break;
-      case "skin": document.documentElement.setAttribute("data-skin", b.getAttribute("data-v")); render(); break;
       case "reset": S = seed(); ui = newUi(); closeSheet(); render(true); toast("已重設示範資料"); break;
       case "close": closeSheet(); break;
     }
@@ -2724,7 +2722,9 @@ if (typeof module !== "undefined") module.exports = R;
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
 
-  document.documentElement.setAttribute("data-skin", "studio");   // 美術樣品:預設新風格
+  // 配色取自一間音樂教室(對方同意參考):薄荷綠、奶油白、芥末黃、珊瑚粉、琴鍵、金線。
+  // 樣式都掛在 data-skin="studio" 底下,原本的藍色是沒有這個屬性時的樣子。
+  document.documentElement.setAttribute("data-skin", "studio");
   S = seed();
   ui = newUi();
   render(true);
