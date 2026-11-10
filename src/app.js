@@ -162,7 +162,14 @@
     belBadge: '<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/><circle cx="18" cy="6" r="2.4" fill="currentColor"/>',
     personPlus: '<circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c0-3.3 2.7-5.6 6-5.6s6 2.3 6 5.6"/><path d="M19 8v6M16 11h6"/>',
     warn: '<path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.2h.01"/>',
-    undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h10a5 5 0 0 1 0 10h-2"/>'
+    undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h10a5 5 0 0 1 0 10h-2"/>',
+    checklist: '<path d="M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/><path d="M11 6.5h9M11 12.5h9M11 18.5h9"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    hand: '<path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15.5a1.5 1.5 0 0 1 2.4-1.8L8 16"/>',
+    card: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9v6M17.5 9v6"/>',
+    chart: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+    sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
+    bubble: '<path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1h-9l-4.5 3.5V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M7.5 10h9M7.5 13h6"/>'
   };
   function icon(n) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + ICON[n] + "</svg>"; }
   function iconBtn(n, label, act, data) {
@@ -232,7 +239,7 @@
   function vToday() {
     return {
       title: null,
-      left: iconBtn("question", "待確認", "pending"),
+      left: iconBtn("checklist", "待確認", "pending") + iconBtn("question", "功能教學", "guide"),
       center: seg([["today", "今日"], ["month", "月曆"]], ui.mode, "mode"),
       right: iconBtn("bell", "今日提醒", "reminders"),
       html: ui.mode === "month" ? monthView()
@@ -561,7 +568,7 @@
     h += group("AI 課後回報", lc("目前引擎", "範本模式") + upcoming("下載裝置端 AI 模型(約 1.1GB)", "W6"),
       "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
     h += group("資料", upcoming("備份到「檔案」", "W5") + upcoming("從備份還原", "W5") + upcoming("載入示範資料", "W5"));
-    h += group("關於", lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
+    h += group("關於", rowBtn("功能教學", "question", "guide") + lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
     var skin = document.documentElement.getAttribute("data-skin") || "classic";
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
       "</div>" + '<div class="row">' + seg([["studio", "新風格(樣品)"], ["classic", "原本的藍"]], skin, "skin") + "</div>" +
@@ -778,6 +785,67 @@
     openSheet({ title: "課表", right: DONE, body: h + seg([["7", "7 天"], ["14", "14 天"]], String(days), "tdays", ' data-tid="' + tid + '"') +
       primaryBtn("分享給老師(LINE)", "shareTeacher", ' data-tid="' + tid + '" data-days="' + days + '"') +
       '<p class="grp-f">這張卡可以列學生名字——外聘老師本來就要教這些人,這點和家長卡不同。但一樣不放電話,也不印拆帳金額:圖片會被轉傳。</p>' });
+  }
+
+  // ---- 功能教學(GuideView)。文字與 iOS 版 GuideTopics.swift 相同,改一邊要同步另一邊 ----
+  var GUIDE = [
+    { id: "attend", icon: "check", title: "簽到與扣堂", sum: "下課按一下,就從堂數包扣掉一堂。",
+      steps: ["今日頁每位學生右邊有「簽到」,按下去就扣一堂", "一對一的課會直接跳出課後回報卡,可以馬上傳給家長",
+        "團班在時段標題右邊按「全部簽到」,一次簽完整班", "按錯了:到學生頁的「上課紀錄」,往左滑那一筆按「撤銷」"],
+      where: "今日頁" },
+    { id: "leave", icon: "hand", title: "請假與老師取消", sum: "長按學生就能記請假或老師取消,兩者都不扣堂。",
+      steps: ["在今日頁長按那位學生", "選「學生請假」或「老師取消」", "不扣堂、不算收入,也不會產生外聘老師的應付"],
+      where: "今日頁,長按學生" },
+    { id: "card", icon: "bubble", title: "課後回報卡", sum: "一張圖告訴家長:今天上了課、還剩幾堂、下次什麼時候。",
+      steps: ["簽到後自動跳出,已上過的課按「回報卡」可以再打開", "可以修改下方的課後短評", "需要的話按「請家長簽名」,在手機上直接簽",
+        "按「分享給家長」,用 LINE 傳出去"],
+      where: "簽到後,或今日頁的「回報卡」", note: "卡片上不放電話,也不放其他學生的名字——圖片會被轉傳。" },
+    { id: "pending", icon: "checklist", title: "待確認", sum: "時間已經過了、卻還沒登記的課,會自動列在這裡。",
+      steps: ["按左上角的清單圖示", "列出過去 14 天排過、但沒有簽到也沒有記請假的課", "每一筆可以補登:已上課、請假或老師取消"],
+      where: "今日頁左上角", note: "外聘老師不裝 App,通常上完課用 LINE 跟你說——就在這裡補登,漏掉的課不會安靜地不見。" },
+    { id: "remind", icon: "bell", title: "課前提醒", sum: "上課前傳一張提醒小卡給家長。",
+      steps: ["按今日頁右上角的鈴鐺", "選一位學生,看到他自己的提醒卡", "按「分享給家長」"],
+      where: "今日頁右上角", note: "一位學生一張,不做全班總表:列出全班的卡送給任一位家長,等於把其他孩子的名字送出去。" },
+    { id: "calendar", icon: "calendar", title: "月曆", sum: "看整個月的課,也可以補登過去的課。",
+      steps: ["今日頁上方切換到「月曆」", "日期下面的數字是那天有幾堂課,綠色表示還有沒處理的", "點一個日期,下面列出那天的課,過去的日子可以直接簽到"],
+      where: "今日頁上方的「月曆」" },
+    { id: "package", icon: "card", title: "堂數包與收據", sum: "家長買一包課,就新增一個堂數包;收據隨時可以開。",
+      steps: ["學生頁點進學生,按「新增堂數包」,填堂數、金額與收款日期", "收款日期用實際入帳那天:8/31 轉帳、9/1 才入帳,算九月的收款",
+        "堂數包往右滑出「收據」,可以請家長簽收後分享", "點堂數包可以改有效期,或辦理退費", "書本、教材另外用「新增教材費」,當月就算收入"],
+      where: "學生頁 → 學生" },
+    { id: "class", icon: "person3", title: "團班", sum: "同一個時段好幾位學生一起上,建一個班最省事。",
+      steps: ["學生頁右上角按團班圖示,新增團班", "價格跟著班走:這一班每位學生每堂都用班級單價", "在班裡「加入學生」;有人不上了,往左滑「退班」,以前的紀錄都留著"],
+      where: "學生頁右上角" },
+    { id: "teacher", icon: "personClock", title: "外聘老師", sum: "請別的老師來上課,拆帳與應付自動算。",
+      steps: ["學生頁右上角按老師圖示,新增老師並選鐘點費或比例拆帳", "把團班或時段指定給他", "只有實際上到的課才產生應付,請假與老師取消都不算",
+        "對帳頁看本月應付,付了之後按「標記已付」", "老師列往左滑出「課表」,做成圖卡傳給老師"],
+      where: "學生頁右上角" },
+    { id: "trial", icon: "sparkle", title: "體驗課", sum: "還沒報名的學生先試上,不用先買堂數包。",
+      steps: ["新增學生時打開「體驗中」,設定體驗價", "今日頁會顯示「體驗課試上中」;簽到不扣堂,以體驗價算收入", "決定報名後,到學生頁按「轉為正式學生」"],
+      where: "新增學生" },
+    { id: "ledger", icon: "chart", title: "對帳", sum: "月底看這一頁:收了多少、真正賺了多少、誰該續費。",
+      steps: ["「收款」是這個月收到的錢;「認列收入」是這個月上掉的課", "兩者的差額是預收——錢收了、課還沒上,不是這個月的獲利",
+        "下面列出需要提醒續費的學生、快到期的堂數包", "右上角可以匯出報表"],
+      where: "對帳頁", note: "App 匯出的是 Excel(八張工作表);網頁示範版匯出 CSV。" },
+    { id: "past", icon: "archive", title: "教過的學生", sum: "學生不上了就「結束上課」,資料全部保留。",
+      steps: ["學生頁最下面按「結束上課」", "學生移到「教過的學生」,依最後上課的年份分組", "往左滑可以「恢復」;真正刪除也只能在這裡做"],
+      where: "學生頁右上角的封存圖示" }
+  ];
+  function guideIcon(n) { return '<span class="arch-ic">' + icon(n) + "</span>"; }
+  function openGuide() {
+    openSheet({ title: "功能教學", right: DONE, body:
+      '<div class="guide-hero">' + guideIcon("question") + "<b>課約怎麼用</b><span>每一項都是一個步驟清單。手勢:長按學生記請假,列表左右滑動叫出更多動作。</span></div>" +
+      group("", GUIDE.map(function (g) {
+        return navRow('<span class="g-row">' + icon(g.icon) + '<span><span class="nm">' + esc(g.title) + '</span><span class="cap">' + esc(g.sum) + "</span></span></span>",
+          "", "guideTopic", ' data-arg="' + g.id + '"');
+      }).join("")) });
+  }
+  function openGuideTopic(id) {
+    var g = GUIDE.filter(function (x) { return x.id === id; })[0];
+    openSheet({ title: g.title, left: { label: "‹ 功能教學", act: "guide" }, right: DONE, body:
+      '<div class="guide-hero">' + guideIcon(g.icon) + "<b>" + esc(g.title) + "</b><span>" + esc(g.sum) + "</span></div>" +
+      group("步驟", '<ol class="g-steps">' + g.steps.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol>") +
+      group("在哪裡", '<div class="row">' + esc(g.where) + "</div>", g.note ? esc(g.note) : "") });
   }
 
   // ---- 待確認(PendingConfirmView) ----
@@ -1245,6 +1313,8 @@
       case "tdays": openTeacherCard(b.getAttribute("data-tid"), Number(b.getAttribute("data-v"))); break;
       case "shareTeacher": share(teacherCardText(b.getAttribute("data-tid"), Number(b.getAttribute("data-days")))); break;
       case "pending": openPending(); break;
+      case "guide": openGuide(); break;
+      case "guideTopic": openGuideTopic(arg); break;
       case "pay":
         var tid = b.getAttribute("data-tid"), row = R.monthSummary(S, NOW).teachers.filter(function (x) { return x.teacher.id === tid; })[0];
         if (!row) break;
