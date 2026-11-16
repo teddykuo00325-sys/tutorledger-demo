@@ -840,6 +840,9 @@ textarea.csv { margin-top: 4px; border-radius: 14px; border: 0; background: var(
 [data-skin="studio"] .large-title::after {
   width: 54px; height: 5px; border-radius: 3px; background: var(--blocks); opacity: 1; filter: none !important;
 }
+
+/* 教過的團班:班名後面的科目 */
+.cap-inline { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -1800,7 +1803,8 @@ if (typeof module !== "undefined") module.exports = R;
         " 位 · 單堂 " + money(c.price) + "</span>", "", "push", ' data-v="class" data-arg="' + c.id + '"');
     }).join("");
     var h = list.length ? "" : unavailable("person3", "還沒有團班", "同一個時段多位學生一起上課時,建一個班比逐一設定時段好管理——價格也統一跟著班走");
-    return { title: "團班", html: h + group("", rows + rowBtn("新增團班", "plus", "form", ' data-v="addClass"')) };
+    return { title: "團班", right: iconBtn("archive", "教過的團班", "push", ' data-v="pastClasses"'),
+      html: h + group("", rows + rowBtn("新增團班", "plus", "form", ' data-v="addClass"')) };
   }
 
   function vClass(cid) {
@@ -1811,7 +1815,7 @@ if (typeof module !== "undefined") module.exports = R;
     var sl = classSlots(cid);
     h += group("每週時段", sl.length ? sl.map(function (s) {
       var a = R.toMin(s.start); return '<div class="row">' + WEEK[s.dow] + " " + range(a, a + s.minutes) + "</div>"; }).join("")
-      : '<div class="row dim">尚未排時段</div>');
+      : '<div class="row dim">尚未排時段</div>', "要改時間、加一個時段或刪掉,按右上角「編輯」。");
     var members = c.members.slice().sort(function (a, b) { return student(a.studentId).name < student(b.studentId).name ? -1 : 1; });
     h += group("成員", members.map(function (m) {
       var st = student(m.studentId);
@@ -1821,7 +1825,28 @@ if (typeof module !== "undefined") module.exports = R;
         : swBtn("退班", "orange", "leaveClass", ' data-arg="' + cid + '" data-sid="' + st.id + '"'));
     }).join("") + rowBtn("加入學生", "personPlus", "form", ' data-v="addMember" data-arg="' + cid + '"'),
       "退班不會刪除任何資料——退班前上掉的課與收款都留著,只是從那天之後不再排課。");
+    h += group("", rowBtn("結束這個團班", "archive", "endClass", ' data-arg="' + cid + '"'),
+      "班會從團班列表與今日頁移到「教過的團班」,時段、成員名單、上課紀錄與收款全部保留,之後可以恢復。真正的刪除只能在「教過的團班」裡執行。");
     return { title: c.name, right: textBtn("編輯", "form", ' data-v="editClass" data-arg="' + cid + '"'), html: h };
+  }
+
+  // 教過的團班(PastClassesView):與教過的學生同一套兩階段刪除的第二站
+  function classAttended(cid) {
+    return S.sessions.filter(function (x) { return x.classId === cid && x.status === "attended"; });
+  }
+  function vPastClasses() {
+    var list = S.classes.filter(function (c) { return c.archivedAt; })
+      .sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+    if (!list.length) return { title: "教過的團班", html: unavailable("archive", "還沒有教過的團班", "在團班裡按「結束這個團班」,班會移到這裡") };
+    return { title: "教過的團班", html: group("", list.map(function (c) {
+      var done = classAttended(c.id);
+      var last = done.reduce(function (a, x) { return !a || x.at > a ? x.at : a; }, null);
+      var body = '<div class="row stack"><span class="nm hl">' + esc(c.name) + ' <span class="cap-inline">' + esc(c.subject) +
+        '</span></span><span class="cap">上過 ' + done.length + " 人次 · " + c.members.length + " 位學生待過 · 單堂 " + money(c.price) +
+        '</span><span class="cap">' + (last ? "最後上課 " + dateText(last) : "從未上課 · 結束於 " + dateText(c.archivedAt)) + "</span></div>";
+      return swipeRow(body, "", swBtn("永久刪除", "red", "deleteClass", ' data-arg="' + c.id + '"') +
+        swBtn("恢復", "blue", "restoreClass", ' data-arg="' + c.id + '"'));
+    }).join("")) };
   }
 
   function vTeachers() {
@@ -1916,8 +1941,8 @@ if (typeof module !== "undefined") module.exports = R;
   // 繪製
   // =====================================================================
   var VIEWS = { today: vToday, students: vStudents, student: vStudent, archived: vArchived, classes: vClasses,
-    "class": vClass, teachers: vTeachers, ledger: vLedger, settings: vSettings };
-  var BACK_TITLE = { students: "學生", classes: "團班", teachers: "授課老師", archived: "教過的學生" };
+    "class": vClass, pastClasses: vPastClasses, teachers: vTeachers, ledger: vLedger, settings: vSettings };
+  var BACK_TITLE = { students: "學生", classes: "團班", teachers: "授課老師", archived: "教過的學生", pastClasses: "教過的團班" };
 
   function render(scrollTop) {
     var stack = ui.stack[ui.tab], c = cur(), view = VIEWS[c.v](c.arg);
@@ -2149,7 +2174,9 @@ if (typeof module !== "undefined") module.exports = R;
         "堂數包往右滑出「收據」,可以請家長簽收後分享", "點堂數包可以改有效期,或辦理退費", "書本、教材另外用「新增教材費」,當月就算收入"],
       where: "學生頁 → 學生" },
     { id: "class", icon: "person3", title: "團班", sum: "同一個時段好幾位學生一起上,建一個班最省事。",
-      steps: ["學生頁右上角按團班圖示,新增團班", "價格跟著班走:這一班每位學生每堂都用班級單價", "在班裡「加入學生」;有人不上了,往左滑「退班」,以前的紀錄都留著"],
+      steps: ["學生頁右上角按團班圖示,新增團班", "價格跟著班走:這一班每位學生每堂都用班級單價", "在班裡「加入學生」;有人不上了,往左滑「退班」,以前的紀錄都留著",
+        "要改上課時間或多加一個時段:在班裡按右上角「編輯」",
+        "班不開了:按「結束這個團班」,移到「教過的團班」;真正刪除只能在那裡做,學生的上課紀錄與收款都會保留"],
       where: "學生頁右上角" },
     { id: "teacher", icon: "personClock", title: "外聘老師", sum: "請別的老師來上課,拆帳與應付自動算。",
       steps: ["學生頁右上角按老師圖示,新增老師並選鐘點費或比例拆帳", "把團班或時段指定給他", "只有實際上到的課才產生應付,請假與老師取消都不算",
@@ -2220,7 +2247,7 @@ if (typeof module !== "undefined") module.exports = R;
     S.sessions.slice().sort(function (a, b) { return a.at - b.at; }).forEach(function (s) {
       var st = student(s.studentId), c = s.classId ? klass(s.classId) : null, t = s.teacherId ? teacher(s.teacherId) : null;
       var status = s.status === "attended" ? (s.kind === "trial" ? "試上" : "已上課") : s.status === "leave" ? "請假" : "老師取消";
-      rows.push([iso(s.at), hm(s.at), st.name, c ? c.name : "", status, s.price, t ? t.name : "我", s.payout]);
+      rows.push([iso(s.at), hm(s.at), st.name, c ? c.name : (s.classId ? "(已刪除的團班)" : ""), status, s.price, t ? t.name : "我", s.payout]);
     });
     return rows.map(function (r) { return r.map(function (x) {
       var v = String(x); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(","); }).join("\r\n");
@@ -2386,12 +2413,17 @@ if (typeof module !== "undefined") module.exports = R;
           "指定外聘老師後,這個班的每一堂都會依他的拆帳方式算出應付,並在對帳頁列出。"));
     },
     editClass: function (cid) {
-      var c = klass(cid);
+      var c = klass(cid), slots = classSlots(cid);
       formSheet("editClass", "編輯團班", '<input type="hidden" name="cid" value="' + cid + '">' +
         group("班級資料", textField("name", "班名", c.name, ' maxlength="16"') + textField("subject", "科目", c.subject) +
           stepper("price", "單堂價格", c.price, 100, 5000, 50, "NT$"), "改價只影響之後的課。已上掉的課記的是當時的單價,不會被改寫。") +
         group("", picker("teacher", "授課老師", teacherOpts(), c.teacherId || "me"),
-          "指定外聘老師後,這個班的每一堂都會依他的拆帳方式算出應付,並在對帳頁列出。改費率只影響之後的課。"));
+          "指定外聘老師後,這個班的每一堂都會依他的拆帳方式算出應付,並在對帳頁列出。改費率只影響之後的課。") +
+        slots.map(function (sl, i) {
+          return group("時段 " + (i + 1), slotEditor("s" + i, sl) + toggle("s" + i + "del", "刪除這個時段", false));
+        }).join("") +
+        group("", toggle("addSlot", "新增時段", slots.length === 0) + when("addSlot", slotEditor("n", { dow: 0, start: "18:00", minutes: 60 })),
+          "改時段只影響之後的課。已上掉的課記在學生身上,不會因為刪掉時段而消失。"));
     },
     addMember: function (cid) {
       var c = klass(cid), cand = active().filter(function (st) { return !c.members.some(function (m) { return m.studentId === st.id && !m.leftAt; }); });
@@ -2496,6 +2528,12 @@ if (typeof module !== "undefined") module.exports = R;
         toast("已建立 " + v.name);
       } else {
         var c = klass(v.cid); c.name = v.name; c.subject = v.subject; c.price = num(v.price); c.teacherId = tid;
+        classSlots(v.cid).forEach(function (sl, i) {
+          if (v["s" + i + "del"]) { S.slots = S.slots.filter(function (x) { return x !== sl; }); return; }
+          sl.dow = num(v["s" + i + "dow"]); sl.start = v["s" + i + "start"] || sl.start; sl.minutes = num(v["s" + i + "min"]) || sl.minutes;
+        });
+        if (v.addSlot) S.slots.push({ id: R.newId("sl"), dow: num(v.ndow), start: v.nstart || "18:00", minutes: num(v.nmin) || 60,
+          studentId: null, classId: v.cid, teacherId: null });
         closeSheet(); render(); toast("已儲存");
       }
     } else if (f === "addTeacher") {
@@ -2672,6 +2710,24 @@ if (typeof module !== "undefined") module.exports = R;
         S.sessions = S.sessions.filter(function (s) { return s.studentId !== arg; });
         S.slots = S.slots.filter(function (s) { return s.studentId !== arg; });
         S.classes.forEach(function (c) { c.members = c.members.filter(function (m) { return m.studentId !== arg; }); });
+        closeSheet(); render(); toast("已永久刪除"); break;
+      case "endClass":
+        openActions("結束「" + klass(arg).name + "」?", "移到「教過的團班」。資料不會刪除,之後可以恢復。",
+          [{ label: "結束團班", act: "confirmEndClass", data: ' data-arg="' + arg + '"' }]); break;
+      case "confirmEndClass":
+        klass(arg).archivedAt = T; ui.stack.students = [{ v: "students" }, { v: "classes" }];
+        closeSheet(); render(true); toast("已移至「教過的團班」"); break;
+      case "restoreClass": klass(arg).archivedAt = null; render(); toast("已恢復"); break;
+      case "deleteClass":
+        var dc = klass(arg), bound = S.packages.filter(function (p) { return p.classId === arg; }).length;
+        openActions("永久刪除「" + dc.name + "」?", "班級資料、每週時段與成員名單會刪除,無法復原。學生在這班上過的 " +
+          classAttended(arg).length + " 人次課與收款屬於學生,全部保留,報表照常計入。" +
+          (bound ? "綁定這班的 " + bound + " 筆收費會改成通用,剩下的堂數個別課也能扣。" : ""),
+          [{ label: "永久刪除", act: "confirmDeleteClass", red: true, data: ' data-arg="' + arg + '"' }]); break;
+      case "confirmDeleteClass":
+        S.packages.forEach(function (p) { if (p.classId === arg) p.classId = null; });
+        S.slots = S.slots.filter(function (x) { return x.classId !== arg; });
+        S.classes = S.classes.filter(function (c) { return c.id !== arg; });
         closeSheet(); render(); toast("已永久刪除"); break;
       case "leaveClass": klass(arg).members.forEach(function (m) { if (m.studentId === b.getAttribute("data-sid") && !m.leftAt) m.leftAt = T; });
         render(); toast("已退班,退班前的紀錄都留著"); break;

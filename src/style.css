@@ -830,3 +830,6 @@ textarea.csv { margin-top: 4px; border-radius: 14px; border: 0; background: var(
 [data-skin="studio"] .large-title::after {
   width: 54px; height: 5px; border-radius: 3px; background: var(--blocks); opacity: 1; filter: none !important;
 }
+
+/* 教過的團班:班名後面的科目 */
+.cap-inline { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
