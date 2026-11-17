@@ -356,9 +356,13 @@
         return navRow('<span class="nm">' + esc(st.name) + (st.isTrial ? trialPill() : "") + "</span>",
           '<span class="' + (attention(b) && !st.isTrial ? "red" : "dim") + '">' + (st.isTrial ? "—" : R.balanceText(b)) + "</span>",
           "push", ' data-v="student" data-arg="' + st.id + '"');
-      }).join("")) : unavailable("person3", "還沒有學生", "按右上角的 + 新增第一位學生")
+      }).join("")) : unavailable("person3", "還沒有學生", "按右上角的 + 新增第一位學生。想先看看怎麼用,可以載入示範資料。") +
+        (isEmptyLedger() ? group("", rowBtn("載入示範資料", "sparkle", "demoLoad")) : "")
     };
   }
+
+  /** 帳本是空的(教過的學生也算資料)才能載入示範資料 */
+  function isEmptyLedger() { return !S.students.length && !S.classes.length; }
 
   function myClasses(sid) {
     return S.classes.filter(function (c) {
@@ -609,7 +613,8 @@
       "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
     h += group("資料", rowBtn("備份到「檔案」", "drive", "backup") + rowBtn("從備份還原", "undo", "restorePick") +
       lc("最近一次備份", ui.lastBackupAt ? dateText(ui.lastBackupAt) + " " + hm(ui.lastBackupAt) : "還沒有備份過") +
-      upcoming("載入示範資料", "W5") +
+      (isEmptyLedger() ? rowBtn("載入示範資料", "sparkle", "demoLoad")
+        : rowBtn("清除示範資料", "undo", "demoClear", "", "red")) +
       '<input type="file" id="restoreFile" accept=".json,application/json" hidden>',
       "資料只存在這支手機裡。備份是一個檔案,存到你選的地方,不經過任何伺服器。網頁示範版會下載一個檔案,只能還原到示範版。");
     h += group("關於", rowBtn("功能教學", "question", "guide") + lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
@@ -1523,6 +1528,23 @@
         } catch (err) { toast("這個瀏覽器不允許下載"); }
         break;
       case "restorePick": $("restoreFile").click(); break;
+      // 示範資料(DemoData):空的帳本才能載入;清除後回到空的(App 版只刪示範的那些,
+      // 網頁版全部都是示範資料,所以直接清空)
+      case "demoLoad":
+        if (!isEmptyLedger()) { toast("已經有資料了,示範資料只能載入到空的帳本"); break; }
+        S = seed(); render(true); openActions("已載入示範資料",
+          "7 位學生、1 個團班、2 位外聘老師,以及過去兩週的上課紀錄。試完之後,到「設定」→「資料」按「清除示範資料」就會全部拿掉。",
+          [{ label: "好", act: "close" }]);
+        break;
+      case "demoClear":
+        openActions("清除示範資料?", "網頁示範版會清空全部資料,回到空的帳本。(App 版只刪示範的那些,你自己新增的會留著。)",
+          [{ label: "全部清除", act: "demoClearGo", red: true }]);
+        break;
+      case "demoClearGo":
+        S = { students: [], teachers: [{ id: "me", name: "我", isSelf: true }], classes: [], slots: [],
+              packages: [], sessions: [], payments: [] };
+        closeSheet(); render(true); toast("已清除示範資料");
+        break;
       case "restoreGo":
         if (pendingRestore) {
           S = pendingRestore.data; R.reserveIds(S); ui.teacherName = pendingRestore.settings.teacherName || "";
