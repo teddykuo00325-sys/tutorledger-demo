@@ -133,7 +133,56 @@ var R = (function () {
           price: st.isTrial ? st.trialPrice : st.price, teacherId: sl.teacherId || null });
       }
     });
+    return out.concat(extraSpecs(S, day, out));
+  }
+
+  /** 不在每週時段上的紀錄:臨時課(補課、加課),以及時段改過時間之後留下的舊紀錄。
+   *  臨時課是單獨一位學生的一堂,不併進班的那一組;算在哪個班記在 chargeClassId,
+   *  簽到時用它決定單價、扣哪個包、付哪位老師。(LedgerService.offSlotSessions) */
+  function extraSpecs(S, day, weekly) {
+    var d0 = sod(day).getTime(), taken = {};
+    weekly.forEach(function (sp) { taken[sp.studentId + "|" + sp.startMin] = true; });
+    var out = [];
+    S.sessions.forEach(function (s) {
+      if (sod(s.at).getTime() !== d0) return;
+      var st = byId(S.students, s.studentId);
+      if (!st || st.archivedAt) return;
+      var startMin = s.at.getHours() * 60 + s.at.getMinutes();
+      if (taken[s.studentId + "|" + startMin]) return;
+      var c = s.classId ? byId(S.classes, s.classId) : null;
+      out.push({ slotId: "x:" + s.id, extraId: s.id, studentId: st.id, name: st.name, start: fromMin(startMin),
+        startMin: startMin, endMin: startMin + (s.minutes || 60), classId: null, className: "",
+        chargeClassId: c ? c.id : null,
+        price: st.isTrial ? st.trialPrice : (c ? c.price : st.price),
+        teacherId: c ? (c.teacherId || null) : (s.teacherId || null) });
+    });
     return out;
+  }
+
+  /** 排一堂臨時課:一筆「預定」的紀錄。同一位學生同一分鐘已經有課(每週時段或另一堂)就不行——
+   *  同一時刻的兩堂會落在同一筆紀錄上,第二堂永遠簽不到。(LedgerService.scheduleExtra) */
+  function scheduleExtra(S, o) {
+    var st = byId(S.students, o.studentId);
+    if (!st) return { error: "noStudent" };
+    var startMin = o.at.getHours() * 60 + o.at.getMinutes();
+    var clash = daySpecs(S, o.at).some(function (sp) {
+      return sp.studentId === o.studentId && sp.startMin === startMin;
+    });
+    if (clash || recordAt(S, o.studentId, o.at)) return { error: "slotTaken" };
+    var c = o.classId ? byId(S.classes, o.classId) : null;
+    var s = { id: newId("s"), studentId: st.id, at: o.at, slotId: null, classId: c ? c.id : null,
+      status: "planned", extra: true, kind: st.isTrial ? "trial" : (o.kind || "makeup"), minutes: o.minutes || 60,
+      price: 0, packageId: null, teacherId: c ? (c.teacherId || null) : (o.teacherId || null),
+      payout: 0, signature: null, signer: "" };
+    S.sessions.push(s);
+    return { session: s };
+  }
+  /** 取消臨時課:整筆刪掉。已上課的不行,要先撤銷簽到。 */
+  function cancelExtra(S, id) {
+    var s = byId(S.sessions, id);
+    if (!s || s.status === "attended") return false;
+    S.sessions = S.sessions.filter(function (x) { return x.id !== id; });
+    return true;
   }
 
   /** 正式的班依班分組;個別課依開始時間分組(同時段 = 一起上)。(LedgerMath.groupLessons) */
@@ -197,17 +246,35 @@ var R = (function () {
   }
   var seq = 0;
   function newId(prefix) { seq += 1; return prefix + seq; }
+  /** 還原備份之後呼叫:備份裡的編號可能比目前的流水號大,不往上推的話,新建的資料會撞號。 */
+  function reserveIds(S) {
+    ["students", "teachers", "classes", "slots", "packages", "sessions", "payments"].forEach(function (k) {
+      (S[k] || []).forEach(function (x) {
+        var m = /(\d+)$/.exec(String(x.id));
+        if (m && +m[1] > seq) seq = +m[1];
+      });
+    });
+  }
 
   /** 簽到。體驗生不扣堂、以體驗價認列;其餘扣一堂,記下當時的單價與應付外聘老師多少。 */
   function attend(S, spec, at) {
-    if (recordAt(S, spec.studentId, at)) return null;
+    // 預定的那一筆(臨時課)就地改成已上課;其他已登記過的不重複簽
+    var ex = recordAt(S, spec.studentId, at);
+    if (ex && ex.status !== "planned") return null;
     var st = byId(S.students, spec.studentId);
     var trial = !!(st && st.isTrial);
-    var pkg = trial ? null : pickPackage(S, spec.studentId, spec.classId, at);
+    var classId = ex ? ex.classId : (spec.classId || null);
+    var pkg = trial ? null : pickPackage(S, spec.studentId, classId, at);
     var price = trial ? st.trialPrice : spec.price;
     var teacher = teacherFor(S, spec.teacherId);
+    if (ex) {
+      ex.status = "attended"; ex.price = price; ex.packageId = pkg ? pkg.id : null;
+      ex.teacherId = spec.teacherId || null; ex.payout = payoutFor(teacher, price);
+      if (trial) ex.kind = "trial";
+      return ex;
+    }
     var s = { id: newId("s"), studentId: spec.studentId, at: at, slotId: spec.slotId || null,
-      classId: spec.classId || null, status: "attended", kind: trial ? "trial" : "regular",
+      classId: classId, status: "attended", kind: trial ? "trial" : "regular",
       price: price, packageId: pkg ? pkg.id : null, teacherId: spec.teacherId || null,
       payout: payoutFor(teacher, price), signature: null, signer: "" };
     S.sessions.push(s);
@@ -215,14 +282,22 @@ var R = (function () {
   }
   /** 請假 / 老師取消:不扣堂、不認列、不產生應付。 */
   function mark(S, spec, at, status) {
-    if (recordAt(S, spec.studentId, at)) return null;
+    var ex = recordAt(S, spec.studentId, at);
+    if (ex && ex.status === "planned") { ex.status = status; return ex; }
+    if (ex) return null;
     var s = { id: newId("s"), studentId: spec.studentId, at: at, slotId: spec.slotId || null,
       classId: spec.classId || null, status: status, kind: "regular", price: 0, packageId: null,
       teacherId: spec.teacherId || null, payout: 0, signature: null, signer: "" };
     S.sessions.push(s);
     return s;
   }
+  /** 撤銷簽到。臨時課退回「預定」(那一堂還排著);每週時段的課整筆拿掉,回到沒登記的樣子。 */
   function undo(S, sessionId) {
+    var s = byId(S.sessions, sessionId);
+    if (s && s.extra) {
+      s.status = "planned"; s.packageId = null; s.price = 0; s.payout = 0;
+      return;
+    }
     S.sessions = S.sessions.filter(function (s) { return s.id !== sessionId; });
   }
 
@@ -235,7 +310,9 @@ var R = (function () {
       daySpecs(S, day).forEach(function (sp) {
         var at = atTime(day, sp.start);
         if (at > now || at < earliest) return;
-        if (!recordAt(S, sp.studentId, at)) out.push({ spec: sp, at: at });
+        // 「預定」不算處理過:排好的補課,時間到了仍要有個結果
+        var rec = recordAt(S, sp.studentId, at);
+        if (!rec || rec.status === "planned") out.push({ spec: sp, at: at });
       });
     }
     return out.sort(function (a, b) { return b.at - a.at; });
@@ -289,7 +366,10 @@ var R = (function () {
   function dayLoad(S, day) {
     var specs = daySpecs(S, day), d0 = sod(day).getTime();
     var recorded = S.sessions.filter(function (s) { return sod(s.at).getTime() === d0; }).length;
-    var pend = specs.filter(function (sp) { return !recordAt(S, sp.studentId, atTime(day, sp.start)); }).length;
+    var pend = specs.filter(function (sp) {
+      var r = recordAt(S, sp.studentId, atTime(day, sp.start));
+      return !r || r.status === "planned";
+    }).length;
     return { scheduled: specs.length, recorded: recorded, total: Math.max(specs.length, recorded), pending: pend };
   }
 
@@ -415,7 +495,8 @@ var R = (function () {
     consumedAmount: consumedAmount, balance: balance, balanceText: balanceText, needsRenewal: needsRenewal,
     pickPackage: pickPackage, payoutFor: payoutFor, rateText: rateText, teacherFor: teacherFor,
     daySpecs: daySpecs, groupKey: groupKey, groupLessons: groupLessons, conflicts: conflicts,
-    recordAt: recordAt, newId: newId, attend: attend, mark: mark, undo: undo, pending: pending,
+    recordAt: recordAt, newId: newId, reserveIds: reserveIds, attend: attend, mark: mark, undo: undo, pending: pending,
+    scheduleExtra: scheduleExtra, cancelExtra: cancelExtra,
     expiring: expiring, teacherSchedule: teacherSchedule, receiptNumber: receiptNumber,
     monthSummary: monthSummary, dayLoad: dayLoad, studentMonth: studentMonth, reportSummary: reportSummary,
     salutation: salutation, signature: signature,

@@ -580,6 +580,8 @@ button.glass-pro.wide { border-radius: 999px; }
 .cal-badge.on { background: var(--accent); color: var(--on-accent); }
 .cal-badge.empty { background: transparent; }
 .cal-foot { color: var(--fg); font-size: 16px; display: block; margin-top: 8px; }
+.cal-foot-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.cal-foot-row .cal-foot { margin-top: 0; }
 
 /* Sheet:左上取消、正中標題、右上儲存 */
 .sheet { padding: 0; background: color-mix(in srgb, var(--bg) 94%, transparent); }

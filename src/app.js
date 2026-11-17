@@ -165,6 +165,8 @@
     undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h10a5 5 0 0 1 0 10h-2"/>',
     checklist: '<path d="M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/><path d="M11 6.5h9M11 12.5h9M11 18.5h9"/>',
     calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    drive: '<rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M12 4v8M8.5 8.5L12 12l3.5-3.5"/>',
+    calplus: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M12 12.5v5.5M9.25 15.25h5.5"/>',
     hand: '<path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15.5a1.5 1.5 0 0 1 2.4-1.8L8 16"/>',
     card: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9v6M17.5 9v6"/>',
     chart: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 9h8M8 13h8M8 17h5"/>',
@@ -241,7 +243,7 @@
       title: null,
       left: iconBtn("checklist", "待確認", "pending") + iconBtn("question", "功能教學", "guide"),
       center: seg([["today", "今日"], ["month", "月曆"]], ui.mode, "mode"),
-      right: iconBtn("bell", "今日提醒", "reminders"),
+      right: iconBtn("bell", "今日提醒", "reminders") + iconBtn("calplus", "補課或加課", "extra"),
       html: ui.mode === "month" ? monthView()
         : group("", '<div class="row lc"><span class="k b">' + dateText(T) + '</span><span class="v b accent">' +
             WEEK[T.getDay()] + "</span></div>") + dayLessons(T)
@@ -267,7 +269,8 @@
                     : '<span class="cal-badge empty"></span>') + "</button>";
     }
     h += "</div>";
-    return group("", '<div class="cal">' + h + "</div>", '<b class="cal-foot">' + dayTitle(ui.calDay) + "</b>") +
+    return group("", '<div class="cal">' + h + "</div>", '<span class="cal-foot-row"><b class="cal-foot">' + dayTitle(ui.calDay) +
+      '</b><button type="button" class="hdr-btn" data-act="extra" data-day="' + iso(ui.calDay) + '">＋ 這天加課</button></span>') +
       dayLessons(ui.calDay);
   }
 
@@ -301,18 +304,31 @@
   function lessonRow(day, sp, allows) {
     var st = student(sp.studentId), at = R.atTime(day, sp.start), rec = R.recordAt(S, sp.studentId, at);
     var b = R.balance(S, sp.studentId, NOW);
-    var status = rec ? (rec.status === "attended" ? (rec.kind === "trial" ? "試上 ✓" : "已上課 ✓")
+    // 「預定」(排好的臨時課)跟沒登記一樣:還要簽到或請假
+    var open = !rec || rec.status === "planned";
+    var status = !open ? (rec.status === "attended" ? (rec.kind === "trial" ? "試上 ✓" : "已上課 ✓")
       : rec.status === "leave" ? "請假" : "老師取消") : (allows ? "" : "預定");
     var data = ' data-day="' + iso(day) + '" data-slot="' + sp.slotId + '" data-sid="' + sp.studentId + '"';
     var right = rec && rec.status === "attended"
       ? '<button type="button" class="bordered sm" data-act="card" data-sess="' + rec.id + '">回報卡</button>'
-      : (!rec && allows ? '<button type="button" class="sm" data-act="attend"' + data + ">簽到</button>" : "");
+      : (open && allows ? '<button type="button" class="sm" data-act="attend"' + data + ">簽到</button>" : "");
     // 體驗生還沒買包,堂數必然是 0——紅字「剩 0 堂」會讓人以為該催續費
     var line = st.isTrial ? "體驗課試上中" : R.balanceText(b), warn = !st.isTrial && attention(b);
-    return '<div class="row lesson"' + (!rec && allows ? ' data-lp="1"' + data : "") + '><div class="grow">' +
-      '<div class="nm hl">' + esc(st.name) + '</div><div class="sub' + (warn ? " red" : "") + '">' +
+    var absent = rec && (rec.status === "leave" || rec.status === "teacherCancel");
+    // 長按:沒登記 → 請假/取消;請假後 → 安排補課;臨時課還沒上 → 刪除
+    var lp = (open && allows) || (absent && !sp.extraId) || (sp.extraId && rec && rec.status !== "attended");
+    var badge = sp.extraId && rec ? ' <span class="cap-pill">' + extraLabel(rec) + "</span>" : "";
+    return '<div class="row lesson"' + (lp ? ' data-lp="1"' + data : "") + '><div class="grow">' +
+      '<div class="nm hl">' + esc(st.name) + badge + '</div><div class="sub' + (warn ? " red" : "") + '">' +
       range(sp.startMin, sp.endMin) + " · " + line + "</div>" +
       (status ? '<div class="cap">' + status + "</div>" : "") + "</div>" + right + "</div>";
+  }
+
+  /** 「補課」「加課」,算在班上的再加班名(DayLessonsList.extraLabel) */
+  function extraLabel(rec) {
+    var k = rec.kind === "makeup" ? "補課" : rec.kind === "trial" ? "臨時體驗課" : "加課";
+    var c = rec.classId ? R.byId(S.classes, rec.classId) : null;
+    return esc(c ? k + " · " + c.name : k);
   }
 
   function findSpec(dayIso, slotId, sid) {
@@ -410,7 +426,9 @@
 
     var ss = S.sessions.filter(function (s) { return s.studentId === sid; }).sort(function (a, c) { return c.at - a.at; });
     h += group("上課紀錄", ss.length ? ss.map(function (s) {
-      var label = s.status === "attended" ? (s.kind === "trial" ? "試上" : (s.packageId ? "已上課 ✓" : "已上課(欠堂)"))
+      var label = s.status === "attended" ? (s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課 ✓"
+          : (s.packageId ? "已上課 ✓" : "已上課(欠堂)"))
+        : s.status === "planned" ? (s.at > NOW ? (s.kind === "makeup" ? "預定補課" : "預定") : "未上")
         : s.status === "leave" ? "請假" : "老師取消";
       var body = '<div class="row"><span class="grow">' + dateTimeText(s.at) + "</span>" +
         (s.signature ? '<span class="accent">' + icon("sign") + "</span>" : "") +
@@ -589,7 +607,11 @@
     h += group("完整版", lc("狀態", "完整版"), "測試階段預設為完整版。上架前會改由 App 內購買決定。");
     h += group("AI 課後回報", lc("目前引擎", "範本模式") + upcoming("下載裝置端 AI 模型(約 1.1GB)", "W6"),
       "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
-    h += group("資料", upcoming("備份到「檔案」", "W5") + upcoming("從備份還原", "W5") + upcoming("載入示範資料", "W5"));
+    h += group("資料", rowBtn("備份到「檔案」", "drive", "backup") + rowBtn("從備份還原", "undo", "restorePick") +
+      lc("最近一次備份", ui.lastBackupAt ? dateText(ui.lastBackupAt) + " " + hm(ui.lastBackupAt) : "還沒有備份過") +
+      upcoming("載入示範資料", "W5") +
+      '<input type="file" id="restoreFile" accept=".json,application/json" hidden>',
+      "資料只存在這支手機裡。備份是一個檔案,存到你選的地方,不經過任何伺服器。網頁示範版會下載一個檔案,只能還原到示範版。");
     h += group("關於", rowBtn("功能教學", "question", "guide") + lc("版本", "0.1.0 (W1)") + upcoming("隱私政策", "W11"));
     h += group("網頁示範版", '<div class="row">' + seg([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]], theme, "theme") +
       "</div>" + rowBtn("重設示範資料", "undo", "reset"),
@@ -823,6 +845,14 @@
     { id: "pending", icon: "checklist", title: "待確認", sum: "時間已經過了、卻還沒登記的課,會自動列在這裡。",
       steps: ["按左上角的清單圖示", "列出過去 14 天排過、但沒有簽到也沒有記請假的課", "每一筆可以補登:已上課、請假或老師取消"],
       where: "今日頁左上角", note: "外聘老師不裝 App,通常上完課用 LINE 跟你說——就在這裡補登,漏掉的課不會安靜地不見。" },
+    { id: "makeup", icon: "calplus", title: "補課與加課", sum: "不在每週時段上的課,排一堂臨時課;簽到時照樣扣堂。",
+      steps: ["學生請假後,在今日頁長按他,選「安排補課…」:學生和班級都已帶好",
+        "或按今日頁右上角的「補課或加課」,自己選學生、日期與時間",
+        "那天它會出現在今日頁與月曆,標著「補課」或「加課」,按「簽到」扣一堂",
+        "學生在上團班的話,可以選「算在」那個班:用班級單價、扣班的堂數包",
+        "不上了:長按那一堂,選「刪除這堂臨時課」"],
+      where: "今日頁右上角,或長按請假的學生",
+      note: "補課與加課都扣堂,分開記是為了對帳頁的「其中補課」。時間過了還沒登記,會進「待確認」。" },
     { id: "remind", icon: "bell", title: "課前提醒", sum: "上課前傳一張提醒小卡給家長。",
       steps: ["按今日頁右上角的鈴鐺", "選一位學生,看到他自己的提醒卡", "按「分享給家長」"],
       where: "今日頁右上角", note: "一位學生一張,不做全班總表:列出全班的卡送給任一位家長,等於把其他孩子的名字送出去。" },
@@ -849,6 +879,13 @@
       steps: ["「收款」是這個月收到的錢;「認列收入」是這個月上掉的課", "兩者的差額是預收——錢收了、課還沒上,不是這個月的獲利",
         "下面列出需要提醒續費的學生、快到期的堂數包", "右上角可以匯出報表"],
       where: "對帳頁", note: "App 匯出的是 Excel(八張工作表);網頁示範版匯出 CSV。" },
+    { id: "backup", icon: "drive", title: "備份與還原", sum: "資料只存在這支手機裡,備份是一個你自己保管的檔案。",
+      steps: ["在設定頁的「資料」按備份到「檔案」,存到 iCloud 雲碟或其他地方",
+        "用了一週還沒備份過,或上次備份已超過兩週,今日頁上方會提醒你",
+        "換手機或資料出問題:在設定頁按「從備份還原」,選那個檔案",
+        "還原會換掉手機上現在的資料;換掉之前,App 會先自動留一份目前資料的備份"],
+      where: "設定頁 →「資料」",
+      note: "備份檔不經過任何伺服器。裡面有家長的電話與收款紀錄,請存在只有你看得到的地方。網頁示範版的備份是下載一個檔案,只能還原到示範版。" },
     { id: "past", icon: "archive", title: "教過的學生", sum: "學生不上了就「結束上課」,資料全部保留。",
       steps: ["學生頁最下面按「結束上課」", "學生移到「教過的學生」,依最後上課的年份分組", "往左滑可以「恢復」;真正刪除也只能在這裡做"],
       where: "學生頁右上角的封存圖示" }
@@ -896,17 +933,52 @@
     var f = findSpec(row.getAttribute("data-day"), row.getAttribute("data-slot"), row.getAttribute("data-sid"));
     if (!f) return;
     var data = ' data-day="' + row.getAttribute("data-day") + '" data-slot="' + row.getAttribute("data-slot") + '" data-sid="' + row.getAttribute("data-sid") + '"';
-    openActions(f.spec.name + " · " + range(f.spec.startMin, f.spec.endMin), "", [
-      { label: "學生請假(不扣堂)", act: "leave", data: data },
-      { label: "老師取消(不扣堂)", act: "cancel", data: data }]);
+    var rec = R.recordAt(S, f.spec.studentId, f.at), items = [];
+    if (!rec || rec.status === "planned") {
+      items.push({ label: "學生請假(不扣堂)", act: "leave", data: data },
+                 { label: "老師取消(不扣堂)", act: "cancel", data: data });
+    }
+    if (rec && (rec.status === "leave" || rec.status === "teacherCancel") && !f.spec.extraId) {
+      // 預設排在隔天、同一時間:同一天同一時間就是請假的那一堂,一打開就會撞課
+      var next = R.addDays(R.sod(f.day) > T ? R.sod(f.day) : T, 1);
+      items.push({ label: "安排補課…", act: "extra", data: ' data-sid="' + f.spec.studentId + '" data-day="' + iso(next) +
+        '" data-start="' + f.spec.start + '" data-min="' + (f.spec.endMin - f.spec.startMin) + '" data-cls="' + (f.spec.classId || "") + '"' });
+    }
+    if (f.spec.extraId && rec && rec.status !== "attended") {
+      items.push({ label: "刪除這堂臨時課", act: "cancelExtra", red: true, data: ' data-sess="' + rec.id + '"' });
+    }
+    openActions(f.spec.name + " · " + range(f.spec.startMin, f.spec.endMin), "", items);
   }
+
+  // ---- 補課與加課(ExtraLessonSheet) ----
+  function openExtra(d) {
+    var studs = active(), mine = d.studentId ? classesOf(d.studentId) : S.classes.filter(function (c) { return !c.archivedAt; });
+    var trial = d.studentId && student(d.studentId).isTrial;
+    formSheet("extra", d.kind === "regular" ? "加一堂課" : "安排補課",
+      group("", picker("sid", "學生", [["", "請選擇"]].concat(studs.map(function (x) { return [x.id, x.name]; })), d.studentId || "") +
+        (trial ? lc("類型", "體驗課") : segField("kind", [["makeup", "補課"], ["regular", "加課"]], d.kind || "makeup")),
+        trial ? "體驗中的學生上的是體驗課:不扣堂,以體驗價算收入。" : "補課與加課都會扣一堂。分開記,對帳頁才看得出這個月補了幾堂。") +
+      group("", dateField("date", "日期", iso(d.day || T)) + timeField("start", "開始時間", d.start) +
+        picker("min", "單堂時長", durOpts(), d.minutes || 60)) +
+      (mine.length ? group("", picker("cls", "算在", [["", "個別課"]].concat(mine.map(function (c) { return [c.id, c.name]; })), d.classId || ""),
+        "算在班上:用班級單價、扣這個班的堂數包、由班上的老師授課。") : "") +
+      when("cls=", group("", picker("teacher", "授課老師", teacherOpts(), "me"))));
+  }
+  /** 學生目前在上的班 */
+  function classesOf(sid) {
+    return S.classes.filter(function (c) {
+      return !c.archivedAt && c.members.some(function (m) { return m.studentId === sid && !m.leftAt; });
+    });
+  }
+  function nextWholeHour() { return R.fromMin(Math.min(new Date().getHours() + 1, 22) * 60); }
 
   // ---- 報表摘要(ReportSummarySheet)與匯出 ----
   function csv() {
     var rows = [["日期", "時間", "學生", "班級", "狀態", "認列", "授課老師", "應付外聘"]];
     S.sessions.slice().sort(function (a, b) { return a.at - b.at; }).forEach(function (s) {
       var st = student(s.studentId), c = s.classId ? klass(s.classId) : null, t = s.teacherId ? teacher(s.teacherId) : null;
-      var status = s.status === "attended" ? (s.kind === "trial" ? "試上" : "已上課") : s.status === "leave" ? "請假" : "老師取消";
+      var status = s.status === "attended" ? (s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課" : "已上課")
+        : s.status === "planned" ? "未上" : s.status === "leave" ? "請假" : "老師取消";
       rows.push([iso(s.at), hm(s.at), st.name, c ? c.name : (s.classId ? "(已刪除的團班)" : ""), status, s.price, t ? t.name : "我", s.payout]);
     });
     return rows.map(function (r) { return r.map(function (x) {
@@ -1131,6 +1203,17 @@
 
   function submitForm(form) {
     var f = form.getAttribute("data-form"), v = readForm(form);
+    if (f === "extra") {
+      if (!v.sid) return toast("請選擇學生");
+      var xd = fromIso(v.date) || T, xs = R.toMin(v.start || "18:00");
+      xd.setHours(Math.floor(xs / 60), xs % 60, 0, 0);
+      if (v.cls && !classesOf(v.sid).some(function (c) { return c.id === v.cls; })) return toast(student(v.sid).name + " 不在這個班");
+      var r = R.scheduleExtra(S, { studentId: v.sid, at: xd, minutes: num(v.min) || 60, kind: v.kind || "makeup",
+        classId: v.cls || null, teacherId: v.cls || v.teacher === "me" ? null : v.teacher });
+      if (r.error) return toast(student(v.sid).name + "這個時間已經有一堂課了,請換個時間");
+      closeSheet(); render();
+      return toast("已排好 " + (xd.getMonth() + 1) + "月" + xd.getDate() + "日 " + hm(xd) + " 的" + extraLabel(r.session));
+    }
     if (f === "addStudent") {
       if (!v.name) return toast("請輸入姓名");
       var id = R.newId("st");
@@ -1314,6 +1397,16 @@
         R.daySpecs(S, day).forEach(function (sp) { if (R.groupKey(sp) === key && R.attend(S, sp, R.atTime(day, sp.start))) n++; });
         render(); toast(n ? "已簽到 " + n + " 位" : "這一組都已經登記過了"); break;
       case "undo": R.undo(S, b.getAttribute("data-sess")); render(); toast("已撤銷"); break;
+      case "extra":
+        openExtra({ studentId: b.getAttribute("data-sid") || "", day: fromIso(b.getAttribute("data-day")) || T,
+          start: b.getAttribute("data-start") || nextWholeHour(), minutes: num(b.getAttribute("data-min")) || 60,
+          kind: "makeup", classId: b.getAttribute("data-cls") || "" });
+        break;
+      case "cancelExtra":
+        closeSheet();
+        if (R.cancelExtra(S, b.getAttribute("data-sess"))) { render(); toast("已刪除這堂臨時課"); }
+        else toast("已上課的不能刪除,要先到學生頁撤銷簽到");
+        break;
       case "card": openCard(b.getAttribute("data-sess")); break;
       case "sign": openSign(b.getAttribute("data-kind"), b.getAttribute("data-id")); break;
       case "padClear":
@@ -1418,6 +1511,24 @@
         } catch (err) { toast("這個瀏覽器不允許下載,請改用「複製 CSV」"); }
         break;
       case "copyCsv": copy(csv(), $("csvText")); break;
+      case "backup":
+        try {
+          var bk = new Blob([JSON.stringify({ format: BACKUP_FORMAT, version: 1, exportedAt: new Date(),
+            settings: { teacherName: ui.teacherName, studio: ui.studio }, data: S }, null, 1)], { type: "application/json" });
+          var ba = document.createElement("a"); ba.href = URL.createObjectURL(bk);
+          ba.download = "課約示範版備份_" + iso(NOW) + ".json"; document.body.appendChild(ba); ba.click(); ba.remove();
+          ui.lastBackupAt = new Date(); render();
+          toast("如果瀏覽器沒有開始下載,表示這個檢視器不允許網頁下載");
+        } catch (err) { toast("這個瀏覽器不允許下載"); }
+        break;
+      case "restorePick": $("restoreFile").click(); break;
+      case "restoreGo":
+        if (pendingRestore) {
+          S = pendingRestore.data; R.reserveIds(S); ui.teacherName = pendingRestore.settings.teacherName || "";
+          ui.studio = pendingRestore.settings.studio || ""; pendingRestore = null;
+          closeSheet(); render(true); toast("已還原");
+        }
+        break;
       case "theme":
         var th = b.getAttribute("data-v");
         if (th === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", th);
@@ -1433,7 +1544,35 @@
     e.preventDefault();
     submitForm(form);
   });
-  document.addEventListener("change", function (e) { var f = e.target.closest && e.target.closest("form"); if (f) updateWhen(f); });
+  document.addEventListener("change", function (e) {
+    if (e.target.id === "restoreFile") return readBackup(e.target);
+    var f = e.target.closest && e.target.closest("form"); if (f) updateWhen(f);
+  });
+
+  // ---- 備份與還原(BackupService)。網頁版:下載 / 讀回一個 JSON 檔 ----
+  var BACKUP_FORMAT = "tutorledger-web-demo-backup", pendingRestore = null;
+  var ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+  /** 讀檔、驗證,通過才問要不要換掉。壞檔案一律在動資料之前擋下。 */
+  function readBackup(input) {
+    var file = input.files && input.files[0];
+    input.value = "";
+    if (!file) return;
+    file.text().then(function (text) {
+      var o;
+      try { o = JSON.parse(text, function (k, v) { return typeof v === "string" && ISO_DATE.test(v) ? new Date(v) : v; }); }
+      catch (err) { return toast("這不是課約的備份檔"); }
+      if (!o || o.format !== BACKUP_FORMAT) return toast(o && o.format === "tutorledger-backup"
+        ? "這是 App 的備份檔,示範版讀不了" : "這不是課約示範版的備份檔");
+      if (o.version > 1) return toast("這個備份檔比示範版新,讀不了");
+      var d = o.data, keys = ["students", "teachers", "classes", "slots", "packages", "sessions", "payments"];
+      if (!d || keys.some(function (k) { return !Array.isArray(d[k]); })) return toast("備份檔不完整,沒有還原");
+      pendingRestore = { data: d, settings: o.settings || {} };
+      var when = o.exportedAt instanceof Date ? dateText(o.exportedAt) + " " + hm(o.exportedAt) : "";
+      openActions("用這份備份換掉目前的資料?", (when ? "備份時間 " + when + "," : "") + d.students.length + " 位學生、" +
+        d.sessions.length + " 筆上課紀錄。目前的資料會被換掉。",
+        [{ label: "還原", act: "restoreGo", red: true }]);
+    }, function () { toast("讀不到這個檔案"); });
+  }
   document.addEventListener("input", function (e) {
     var el = e.target;
     if (el.id === "reportText") {
@@ -1449,7 +1588,7 @@
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
 
-  // 配色取自一間音樂教室(對方同意參考):薄荷綠、奶油白、芥末黃、珊瑚粉、琴鍵、金線。
+  // 配色取自一間音樂教室(對方同意參考):薄荷綠、奶油白、芥末黃、珊瑚粉、色塊條、金線。
   // 樣式都掛在 data-skin="studio" 底下,原本的藍色是沒有這個屬性時的樣子。
   document.documentElement.setAttribute("data-skin", "studio");
   S = seed();

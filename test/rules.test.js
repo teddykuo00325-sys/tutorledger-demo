@@ -211,7 +211,9 @@ function spec(sid, start, end, extra) {
   R.attend(S, R.daySpecs(S, T)[0], R.atTime(T, "16:00"));
   eq("處理一堂後待處理 2", R.dayLoad(S, T).pending, 2);
   R.attend(S, spec("an", 1200, 1260, { price: 800 }), R.atTime(T, "20:00"));   // 臨時加的課
-  eq("紀錄比預定多時取大者", R.dayLoad(S, T).total, 3);
+  // 臨時加的課也是當天的一堂:3 堂每週時段 + 1 堂臨時課 = 4。
+  // (原本取 max(排定, 紀錄) 得 3——臨時課把還沒登記的正課「吃掉」了)
+  eq("臨時加的課算進當天總數", R.dayLoad(S, T).total, 4);
 
   S = base();
   S.packages = [pkg("p", "you", 10, 6000, { purchasedAt: day(-1), classId: "kids" })];
@@ -237,6 +239,66 @@ function spec(sid, start, end, extra) {
   eq("累計收款含教材", rs.totalCollected, 17500);
   eq("30 天內到期:10 堂、8000", [rs.expiringSoonLessons, rs.expiringSoonAmount], [10, 8000]);
   eq("已作廢:10 堂、9000(不算負債)", [rs.forfeitedLessons, rs.forfeitedAmount, rs.liability], [10, 9000, 8000]);
+})();
+
+// ---------- 臨時課(補課、加課) ----------
+(function () {
+  var S = base();
+  S.slots = [{ id: "sl1", dow: T.getDay(), start: "18:00", minutes: 60, studentId: "an", classId: null, teacherId: null }];
+  S.packages = [pkg("a", "an", 10, 8000)];
+  var at15 = R.atTime(T, "15:00");
+  var r = R.scheduleExtra(S, { studentId: "an", at: at15, minutes: 45, kind: "makeup" });
+  eq("排好一堂補課", !!r.session, true);
+  var specs = R.daySpecs(S, T).filter(function (s) { return s.studentId === "an"; });
+  eq("當天兩堂", specs.length, 2);
+  var x = specs.filter(function (s) { return s.extraId; })[0];
+  eq("臨時課時間與時長", [x.startMin, x.endMin], [900, 945]);
+  eq("排課不扣堂", R.balance(S, "an", T).net, 10);
+  eq("撞到每週時段", R.scheduleExtra(S, { studentId: "an", at: R.atTime(T, "18:00") }).error, "slotTaken");
+  eq("撞到另一堂臨時課", R.scheduleExtra(S, { studentId: "an", at: at15 }).error, "slotTaken");
+  eq("時間過了還沒登記 → 待確認", R.pending(S, R.atTime(T, "16:00"))
+    .filter(function (p) { return p.spec.extraId; }).length, 1);
+  var s = R.attend(S, x, at15);
+  eq("簽到就地改那一筆,不多一筆", [S.sessions.length, s.status, s.kind], [1, "attended", "makeup"]);
+  eq("補課扣一堂", R.balance(S, "an", T).net, 9);
+  eq("本月補課 1 堂", R.studentMonth(S, "an", T).makeups, 1);
+  eq("已上課的不能刪", R.cancelExtra(S, s.id), false);
+  R.undo(S, s.id);
+  eq("撤銷後退回預定,這堂還排著", [S.sessions.length, s.status, R.balance(S, "an", T).net], [1, "planned", 10]);
+  eq("預定的可以刪", R.cancelExtra(S, s.id), true);
+  eq("刪掉後當天只剩每週那堂", R.daySpecs(S, T).length, 1);
+
+  // 算在班上:班價、班的包、班上的老師
+  S = base();
+  S.packages = [pkg("g", "you", 10, 6000), pkg("k", "you", 10, 6000, { classId: "kids" })];
+  r = R.scheduleExtra(S, { studentId: "you", at: R.atTime(T, "10:00"), kind: "makeup", classId: "kids" });
+  x = R.daySpecs(S, T).filter(function (s) { return s.extraId; })[0];
+  eq("臨時課不併進班的那一組", x.classId, null);
+  eq("單價與老師跟著班", [x.price, x.teacherId], [600, "chen"]);
+  s = R.attend(S, x, R.atTime(T, "10:00"));
+  eq("扣班的包、付陳老師五成", [s.packageId, s.payout, s.classId], ["k", 300, "kids"]);
+
+  // 體驗生
+  S = base();
+  r = R.scheduleExtra(S, { studentId: "qing", at: R.atTime(T, "10:00"), kind: "makeup" });
+  eq("體驗生排的是體驗課", r.session.kind, "trial");
+  s = R.attend(S, R.daySpecs(S, T)[0], R.atTime(T, "10:00"));
+  eq("以體驗價計、不扣堂", [s.price, s.packageId, R.balance(S, "qing", T).net], [400, null, 0]);
+
+  // 請假後的臨時課可改成請假
+  S = base();
+  r = R.scheduleExtra(S, { studentId: "an", at: R.atTime(T, "10:00"), kind: "regular" });
+  R.mark(S, R.daySpecs(S, T)[0], R.atTime(T, "10:00"), "leave");
+  eq("預定的臨時課可記請假", [S.sessions.length, S.sessions[0].status], [1, "leave"]);
+  eq("記了請假就不在待確認", R.pending(S, R.atTime(T, "12:00")).length, 0);
+})();
+
+(function () {
+  var S = base();
+  S.sessions = [{ id: "s9999", studentId: "an", at: T, status: "leave" }];
+  R.reserveIds(S);
+  eq("還原後新編號不撞備份裡的編號", R.newId("s") === "s9999", false);
+  eq("新編號在備份之後", +R.newId("s").slice(1) > 9999, true);
 })();
 
 print("\n" + pass + " 通過," + fail + " 失敗");
