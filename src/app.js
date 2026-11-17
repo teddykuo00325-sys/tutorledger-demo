@@ -425,7 +425,8 @@
     var slots = S.slots.filter(function (s) { return s.studentId === sid; })
       .sort(function (a, c) { return (a.dow - c.dow) || (R.toMin(a.start) - R.toMin(c.start)); });
     h += group("每週時段", slots.length ? slots.map(function (s) {
-      var a = R.toMin(s.start); return lc(WEEK[s.dow], range(a, a + s.minutes)); }).join("")
+      var a = R.toMin(s.start), t = s.teacherId ? teacher(s.teacherId) : null;
+      return lc(WEEK[s.dow], range(a, a + s.minutes) + (t ? " · " + esc(t.name) : "")); }).join("")
       : '<div class="row dim">尚未設定</div>');
 
     var ss = S.sessions.filter(function (s) { return s.studentId === sid; }).sort(function (a, c) { return c.at - a.at; });
@@ -874,7 +875,7 @@
         "班不開了:按「結束這個團班」,移到「教過的團班」;真正刪除只能在那裡做,學生的上課紀錄與收款都會保留"],
       where: "學生頁右上角" },
     { id: "teacher", icon: "personClock", title: "外聘老師", sum: "請別的老師來上課,拆帳與應付自動算。",
-      steps: ["學生頁右上角按老師圖示,新增老師並選鐘點費或比例拆帳", "把團班或時段指定給他", "只有實際上到的課才產生應付,請假與老師取消都不算",
+      steps: ["學生頁右上角按老師圖示,新增老師並選鐘點費或比例拆帳", "在團班的「編輯」,或學生的每週時段(新增或編輯學生)裡,把「授課老師」選成他", "只有實際上到的課才產生應付,請假與老師取消都不算",
         "對帳頁看本月應付,付了之後按「標記已付」", "老師列往左滑出「課表」,做成圖卡傳給老師"],
       where: "學生頁右上角" },
     { id: "trial", icon: "sparkle", title: "體驗課", sum: "還沒報名的學生先試上,不用先買堂數包。",
@@ -1067,10 +1068,18 @@
   function weekdayOpts() { return WEEK.map(function (w, i) { return [i, w]; }); }
   function durOpts() { return [[30, "30 分鐘"], [45, "45 分鐘"], [60, "60 分鐘"], [90, "90 分鐘"], [120, "120 分鐘"]]; }
   function teacherOpts() { return S.teachers.map(function (t) { return [t.id, t.isSelf ? "我自己" : t.name]; }); }
-  function slotEditor(prefix, sl) {
+  function slotEditor(prefix, sl, withTeacher) {
     return picker(prefix + "dow", "每週", weekdayOpts(), sl.dow) + timeField(prefix + "start", "開始時間", sl.start) +
-      picker(prefix + "min", "單堂時長", durOpts(), sl.minutes);
+      picker(prefix + "min", "單堂時長", durOpts(), sl.minutes) + (withTeacher ? slotTeacher(prefix, sl) : "");
   }
+  /** 個別時段的授課老師(SlotTeacherPicker)。還沒有外聘老師時不顯示;團班的老師在班上設定 */
+  function slotTeacher(prefix, sl) {
+    var hired = S.teachers.filter(function (t) { return !t.isSelf && (!t.archivedAt || t.id === sl.teacherId); });
+    if (!hired.length) return "";
+    return picker(prefix + "teacher", "授課老師", [["me", "我自己"]].concat(hired.map(function (t) { return [t.id, t.name]; })),
+      sl.teacherId || "me");
+  }
+  function teacherOf(v) { return v && v !== "me" ? v : null; }
   function guardianEditor(st) {
     return textField("guardian", "稱謂(例：媽媽)", st.guardianTitle) + textField("phone", "電話", st.phone, ' inputmode="tel"') +
       areaField("note", "備註", st.note);
@@ -1092,7 +1101,8 @@
           "體驗課以體驗價計費且不扣堂數包。預設為單堂價的 " + TRIAL_PCT + "%,可自訂。") +
         group("常用聯絡人", guardianEditor({ guardianTitle: "", phone: "", note: "" })) +
         group("學生狀況", areaField("statusNote", "程度、進度、要注意的地方", "")) +
-        group("每週時段", slotEditor("", { dow: 1, start: "18:00", minutes: 60 })));
+        group("每週時段", slotEditor("", { dow: 1, start: "18:00", minutes: 60 }, true),
+          "外聘老師上的課,簽到時依他的拆帳方式算出應付,列在對帳頁。"));
     },
     editStudent: function (sid) {
       var st = student(sid), slots = S.slots.filter(function (s) { return s.studentId === sid; });
@@ -1104,9 +1114,9 @@
         group("學生狀況", areaField("statusNote", "程度、進度、要注意的地方", st.statusNote)) +
         group("常用聯絡人", guardianEditor(st)) +
         slots.map(function (sl, i) {
-          return group("時段 " + (i + 1), slotEditor("s" + i, sl) + toggle("s" + i + "del", "刪除這個時段", false));
+          return group("時段 " + (i + 1), slotEditor("s" + i, sl, true) + toggle("s" + i + "del", "刪除這個時段", false));
         }).join("") +
-        group("", toggle("addSlot", "新增時段", slots.length === 0) + when("addSlot", slotEditor("n", { dow: 1, start: "18:00", minutes: 60 })),
+        group("", toggle("addSlot", "新增時段", slots.length === 0) + when("addSlot", slotEditor("n", { dow: 1, start: "18:00", minutes: 60 }, true)),
           "沒有時段的學生不會出現在「今日」頁,但上課紀錄與堂數包都會保留。"));
     },
     addPackage: function (sid) { packageForm(sid, "tuition"); },
@@ -1226,7 +1236,7 @@
       S.students.push({ id: id, name: v.name, subject: v.subject || "鋼琴", price: num(v.price), guardianTitle: v.guardian,
         phone: v.phone, note: v.note, statusNote: v.statusNote, isTrial: !!v.trial, trialPrice: num(v.trialPrice), archivedAt: null });
       S.slots.push({ id: R.newId("sl"), dow: num(v.dow), start: v.start || "18:00", minutes: num(v.min) || 60,
-        studentId: id, classId: null, teacherId: null });
+        studentId: id, classId: null, teacherId: teacherOf(v.teacher) });
       closeSheet(); ui.stack.students = [{ v: "students" }, { v: "student", arg: id }]; ui.tab = "students"; render(true);
       toast("已新增 " + v.name);
     } else if (f === "editStudent") {
@@ -1237,9 +1247,10 @@
       S.slots.filter(function (s) { return s.studentId === v.sid; }).forEach(function (sl, i) {
         if (v["s" + i + "del"]) { S.slots = S.slots.filter(function (x) { return x !== sl; }); return; }
         sl.dow = num(v["s" + i + "dow"]); sl.start = v["s" + i + "start"] || sl.start; sl.minutes = num(v["s" + i + "min"]) || sl.minutes;
+        if (v["s" + i + "teacher"] !== undefined) sl.teacherId = teacherOf(v["s" + i + "teacher"]);
       });
       if (v.addSlot) S.slots.push({ id: R.newId("sl"), dow: num(v.ndow), start: v.nstart || "18:00", minutes: num(v.nmin) || 60,
-        studentId: v.sid, classId: null, teacherId: null });
+        studentId: v.sid, classId: null, teacherId: teacherOf(v.nteacher) });
       closeSheet(); render(); toast("已儲存");
     } else if (f === "pkg") {
       var mat = v.kind === "material";
