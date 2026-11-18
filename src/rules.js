@@ -256,13 +256,16 @@ var R = (function () {
     });
   }
 
-  /** 簽到。體驗生不扣堂、以體驗價認列;其餘扣一堂,記下當時的單價與應付外聘老師多少。 */
-  function attend(S, spec, at) {
+  /** 簽到。體驗生不扣堂、以體驗價認列;其餘扣一堂,記下當時的單價與應付外聘老師多少。
+   *  noShow = 學生缺席:帳上與上課相同(扣堂、認列、外聘老師照領),只是標成缺席。
+   *  體驗課沒有缺席扣堂(不收費),回傳 null。 */
+  function attend(S, spec, at, noShow) {
     // 預定的那一筆(臨時課)就地改成已上課;其他已登記過的不重複簽
     var ex = recordAt(S, spec.studentId, at);
     if (ex && ex.status !== "planned") return null;
     var st = byId(S.students, spec.studentId);
     var trial = !!(st && st.isTrial);
+    if (noShow && trial) return null;
     var classId = ex ? ex.classId : (spec.classId || null);
     var pkg = trial ? null : pickPackage(S, spec.studentId, classId, at);
     var price = trial ? st.trialPrice : spec.price;
@@ -270,20 +273,25 @@ var R = (function () {
     if (ex) {
       ex.status = "attended"; ex.price = price; ex.packageId = pkg ? pkg.id : null;
       ex.teacherId = spec.teacherId || null; ex.payout = payoutFor(teacher, price);
+      ex.noShow = !!noShow;
       if (trial) ex.kind = "trial";
       return ex;
     }
     var s = { id: newId("s"), studentId: spec.studentId, at: at, slotId: spec.slotId || null,
       classId: classId, status: "attended", kind: trial ? "trial" : "regular",
       price: price, packageId: pkg ? pkg.id : null, teacherId: spec.teacherId || null,
-      payout: payoutFor(teacher, price), signature: null, signer: "" };
+      payout: payoutFor(teacher, price), signature: null, signer: "", noShow: !!noShow };
     S.sessions.push(s);
     return s;
   }
-  /** 請假 / 老師取消:不扣堂、不認列、不產生應付。 */
+  /** 請假 / 老師取消:不扣堂、不認列、不產生應付。記成缺席的那一堂也能改過來(扣堂回補)。 */
   function mark(S, spec, at, status) {
     var ex = recordAt(S, spec.studentId, at);
     if (ex && ex.status === "planned") { ex.status = status; return ex; }
+    if (ex && ex.noShow) {
+      ex.status = status; ex.noShow = false; ex.packageId = null; ex.price = 0; ex.payout = 0;
+      return ex;
+    }
     if (ex) return null;
     var s = { id: newId("s"), studentId: spec.studentId, at: at, slotId: spec.slotId || null,
       classId: spec.classId || null, status: status, kind: "regular", price: 0, packageId: null,
@@ -295,7 +303,7 @@ var R = (function () {
   function undo(S, sessionId) {
     var s = byId(S.sessions, sessionId);
     if (s && s.extra) {
-      s.status = "planned"; s.packageId = null; s.price = 0; s.payout = 0;
+      s.status = "planned"; s.packageId = null; s.price = 0; s.payout = 0; s.noShow = false;
       return;
     }
     S.sessions = S.sessions.filter(function (s) { return s.id !== sessionId; });
@@ -375,10 +383,14 @@ var R = (function () {
 
   /** 一位學生這個月:上課、請假、消耗了多少錢。(LedgerMath.monthlySummary) */
   function studentMonth(S, studentId, now) {
-    var mk = monthKey(now), r = { attended: 0, makeups: 0, leaves: 0, consumed: 0 };
+    var mk = monthKey(now), r = { attended: 0, makeups: 0, noShows: 0, leaves: 0, consumed: 0 };
     S.sessions.forEach(function (s) {
       if (s.studentId !== studentId || monthKey(s.at) !== mk) return;
-      if (s.status === "attended") { r.attended++; r.consumed += s.price; if (s.kind === "makeup") r.makeups++; }
+      if (s.status === "attended") {
+        r.attended++; r.consumed += s.price;
+        if (s.kind === "makeup") r.makeups++;
+        if (s.noShow) r.noShows++;
+      }
       else if (s.status === "leave") r.leaves++;
     });
     return r;

@@ -301,5 +301,23 @@ function spec(sid, start, end, extra) {
   eq("新編號在備份之後", +R.newId("s").slice(1) > 9999, true);
 })();
 
+(function () {
+  // 缺席:扣堂、認列、外聘老師照領,只是標成缺席;改請假回補
+  var S = base();
+  S.packages = [pkg("p1", "an", 10, 8000)];
+  var sp = spec("an", 960, 1020, { teacherId: "lin" }), at = R.atTime(day(-1), "16:00");
+  var s = R.attend(S, sp, at, true);
+  eq("缺席扣堂", [s.status, s.noShow, s.packageId, R.balance(S, "an", T).net], ["attended", true, "p1", 9]);
+  eq("缺席照收、林老師照領", [s.price, s.payout], [800, 500]);
+  eq("本月統計算進上課、另記缺席", [R.studentMonth(S, "an", day(-1)).attended, R.studentMonth(S, "an", day(-1)).noShows], [1, 1]);
+  eq("已記缺席不能再簽到", R.attend(S, sp, at), null);
+  R.mark(S, sp, at, "leave");
+  eq("缺席改請假:同一筆、回補", [S.sessions.length, s.status, s.noShow, R.balance(S, "an", T).net], [1, "leave", false, 10]);
+  eq("改請假後不認列、不付老師", [s.price, s.payout], [0, 0]);
+  eq("一般簽到不是缺席", R.attend(S, sp, R.atTime(day(-8), "16:00")).noShow, false);
+  eq("體驗課不能記缺席", R.attend(S, spec("qing", 960, 1020), at, true), null);
+  eq("體驗課沒有留下紀錄", S.sessions.filter(function (x) { return x.studentId === "qing"; }).length, 0);
+})();
+
 print("\n" + pass + " 通過," + fail + " 失敗");
 if (fail > 0) throw new Error(fail + " 項失敗");

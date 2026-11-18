@@ -1172,13 +1172,16 @@ var R = (function () {
     });
   }
 
-  /** 簽到。體驗生不扣堂、以體驗價認列;其餘扣一堂,記下當時的單價與應付外聘老師多少。 */
-  function attend(S, spec, at) {
+  /** 簽到。體驗生不扣堂、以體驗價認列;其餘扣一堂,記下當時的單價與應付外聘老師多少。
+   *  noShow = 學生缺席:帳上與上課相同(扣堂、認列、外聘老師照領),只是標成缺席。
+   *  體驗課沒有缺席扣堂(不收費),回傳 null。 */
+  function attend(S, spec, at, noShow) {
     // 預定的那一筆(臨時課)就地改成已上課;其他已登記過的不重複簽
     var ex = recordAt(S, spec.studentId, at);
     if (ex && ex.status !== "planned") return null;
     var st = byId(S.students, spec.studentId);
     var trial = !!(st && st.isTrial);
+    if (noShow && trial) return null;
     var classId = ex ? ex.classId : (spec.classId || null);
     var pkg = trial ? null : pickPackage(S, spec.studentId, classId, at);
     var price = trial ? st.trialPrice : spec.price;
@@ -1186,20 +1189,25 @@ var R = (function () {
     if (ex) {
       ex.status = "attended"; ex.price = price; ex.packageId = pkg ? pkg.id : null;
       ex.teacherId = spec.teacherId || null; ex.payout = payoutFor(teacher, price);
+      ex.noShow = !!noShow;
       if (trial) ex.kind = "trial";
       return ex;
     }
     var s = { id: newId("s"), studentId: spec.studentId, at: at, slotId: spec.slotId || null,
       classId: classId, status: "attended", kind: trial ? "trial" : "regular",
       price: price, packageId: pkg ? pkg.id : null, teacherId: spec.teacherId || null,
-      payout: payoutFor(teacher, price), signature: null, signer: "" };
+      payout: payoutFor(teacher, price), signature: null, signer: "", noShow: !!noShow };
     S.sessions.push(s);
     return s;
   }
-  /** 請假 / 老師取消:不扣堂、不認列、不產生應付。 */
+  /** 請假 / 老師取消:不扣堂、不認列、不產生應付。記成缺席的那一堂也能改過來(扣堂回補)。 */
   function mark(S, spec, at, status) {
     var ex = recordAt(S, spec.studentId, at);
     if (ex && ex.status === "planned") { ex.status = status; return ex; }
+    if (ex && ex.noShow) {
+      ex.status = status; ex.noShow = false; ex.packageId = null; ex.price = 0; ex.payout = 0;
+      return ex;
+    }
     if (ex) return null;
     var s = { id: newId("s"), studentId: spec.studentId, at: at, slotId: spec.slotId || null,
       classId: spec.classId || null, status: status, kind: "regular", price: 0, packageId: null,
@@ -1211,7 +1219,7 @@ var R = (function () {
   function undo(S, sessionId) {
     var s = byId(S.sessions, sessionId);
     if (s && s.extra) {
-      s.status = "planned"; s.packageId = null; s.price = 0; s.payout = 0;
+      s.status = "planned"; s.packageId = null; s.price = 0; s.payout = 0; s.noShow = false;
       return;
     }
     S.sessions = S.sessions.filter(function (s) { return s.id !== sessionId; });
@@ -1291,10 +1299,14 @@ var R = (function () {
 
   /** 一位學生這個月:上課、請假、消耗了多少錢。(LedgerMath.monthlySummary) */
   function studentMonth(S, studentId, now) {
-    var mk = monthKey(now), r = { attended: 0, makeups: 0, leaves: 0, consumed: 0 };
+    var mk = monthKey(now), r = { attended: 0, makeups: 0, noShows: 0, leaves: 0, consumed: 0 };
     S.sessions.forEach(function (s) {
       if (s.studentId !== studentId || monthKey(s.at) !== mk) return;
-      if (s.status === "attended") { r.attended++; r.consumed += s.price; if (s.kind === "makeup") r.makeups++; }
+      if (s.status === "attended") {
+        r.attended++; r.consumed += s.price;
+        if (s.kind === "makeup") r.makeups++;
+        if (s.noShow) r.noShows++;
+      }
       else if (s.status === "leave") r.leaves++;
     });
     return r;
@@ -1729,17 +1741,19 @@ if (typeof module !== "undefined") module.exports = R;
     var b = R.balance(S, sp.studentId, NOW);
     // 「預定」(排好的臨時課)跟沒登記一樣:還要簽到或請假
     var open = !rec || rec.status === "planned";
-    var status = !open ? (rec.status === "attended" ? (rec.kind === "trial" ? "試上 ✓" : "已上課 ✓")
+    var status = !open ? (rec.status === "attended" ? (rec.noShow ? "缺席(扣堂)" : rec.kind === "trial" ? "試上 ✓" : "已上課 ✓")
       : rec.status === "leave" ? "請假" : "老師取消") : (allows ? "" : "預定");
     var data = ' data-day="' + iso(day) + '" data-slot="' + sp.slotId + '" data-sid="' + sp.studentId + '"';
-    var right = rec && rec.status === "attended"
+    // 缺席沒有回報卡可傳(卡上寫的是「今天上課了」)
+    var right = rec && rec.noShow ? ""
+      : rec && rec.status === "attended"
       ? '<button type="button" class="bordered sm" data-act="card" data-sess="' + rec.id + '">回報卡</button>'
       : (open && allows ? '<button type="button" class="sm" data-act="attend"' + data + ">簽到</button>" : "");
     // 體驗生還沒買包,堂數必然是 0——紅字「剩 0 堂」會讓人以為該催續費
     var line = st.isTrial ? "體驗課試上中" : R.balanceText(b), warn = !st.isTrial && attention(b);
     var absent = rec && (rec.status === "leave" || rec.status === "teacherCancel");
     // 長按:沒登記 → 請假/取消;請假後 → 安排補課;臨時課還沒上 → 刪除
-    var lp = (open && allows) || (absent && !sp.extraId) || (sp.extraId && rec && rec.status !== "attended");
+    var lp = (open && allows) || (absent && !sp.extraId) || (sp.extraId && rec && rec.status !== "attended") || (rec && rec.noShow);
     var badge = sp.extraId && rec ? ' <span class="cap-pill">' + extraLabel(rec) + "</span>" : "";
     return '<div class="row lesson"' + (lp ? ' data-lp="1"' + data : "") + '><div class="grow">' +
       '<div class="nm hl">' + esc(st.name) + badge + '</div><div class="sub' + (warn ? " red" : "") + '">' +
@@ -1854,7 +1868,7 @@ if (typeof module !== "undefined") module.exports = R;
 
     var ss = S.sessions.filter(function (s) { return s.studentId === sid; }).sort(function (a, c) { return c.at - a.at; });
     h += group("上課紀錄", ss.length ? ss.map(function (s) {
-      var label = s.status === "attended" ? (s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課 ✓"
+      var label = s.status === "attended" ? (s.noShow ? (s.packageId ? "缺席(扣堂)" : "缺席(欠堂)") : s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課 ✓"
           : (s.packageId ? "已上課 ✓" : "已上課(欠堂)"))
         : s.status === "planned" ? (s.at > NOW ? (s.kind === "makeup" ? "預定補課" : "預定") : "未上")
         : s.status === "leave" ? "請假" : "老師取消";
@@ -2015,7 +2029,7 @@ if (typeof module !== "undefined") module.exports = R;
     h += group("本月", active().map(function (st) {
       var x = R.studentMonth(S, st.id, NOW);
       return '<div class="row stack"><span class="nm hl">' + esc(st.name) + '</span><span class="cap">上課 ' + x.attended +
-        "(含補課 " + x.makeups + ")· 請假 " + x.leaves + " · 消耗 " + money(x.consumed) + "</span></div>";
+        "(含補課 " + x.makeups + (x.noShows ? "、缺席 " + x.noShows : "") + ")· 請假 " + x.leaves + " · 消耗 " + money(x.consumed) + "</span></div>";
     }).join(""));
     return { title: "對帳", right: iconBtn("share", "匯出報表", "summary"), html: h };
   }
@@ -2264,15 +2278,17 @@ if (typeof module !== "undefined") module.exports = R;
       steps: ["今日頁每位學生右邊有「簽到」,按下去就扣一堂", "一對一的課會直接跳出課後回報卡,可以馬上傳給家長",
         "團班在時段標題右邊按「全部簽到」,一次簽完整班", "按錯了:到學生頁的「上課紀錄」,往左滑那一筆按「撤銷」"],
       where: "今日頁" },
-    { id: "leave", icon: "hand", title: "請假與老師取消", sum: "長按學生就能記請假或老師取消,兩者都不扣堂。",
-      steps: ["在今日頁長按那位學生", "選「學生請假」或「老師取消」", "不扣堂、不算收入,也不會產生外聘老師的應付"],
+    { id: "leave", icon: "hand", title: "請假、老師取消與缺席", sum: "長按學生就能記請假或老師取消(不扣堂),或學生缺席(扣堂)。",
+      steps: ["在今日頁長按那位學生", "選「學生請假」或「老師取消」:不扣堂、不算收入,也不會產生外聘老師的應付",
+        "學生沒請假也沒來,選「學生缺席」:跟上課一樣扣一堂、外聘老師照領,但不會跳回報卡",
+        "記錯了:再長按一次改成請假,扣掉的那堂會補回來"],
       where: "今日頁,長按學生" },
     { id: "card", icon: "bubble", title: "課後回報卡", sum: "一張圖告訴家長:今天上了課、還剩幾堂、下次什麼時候。",
       steps: ["簽到後自動跳出,已上過的課按「回報卡」可以再打開", "可以修改下方的課後短評", "需要的話按「請家長簽名」,在手機上直接簽",
         "按「分享給家長」,用 LINE 傳出去"],
       where: "簽到後,或今日頁的「回報卡」", note: "卡片上不放電話,也不放其他學生的名字——圖片會被轉傳。" },
     { id: "pending", icon: "checklist", title: "待確認", sum: "時間已經過了、卻還沒登記的課,會自動列在這裡。",
-      steps: ["按左上角的清單圖示", "列出過去 14 天排過、但沒有簽到也沒有記請假的課", "每一筆可以補登:已上課、請假或老師取消"],
+      steps: ["按左上角的清單圖示", "列出過去 14 天排過、但沒有簽到也沒有記請假的課", "每一筆可以補登:已上課、請假、老師取消或缺席"],
       where: "今日頁左上角", note: "外聘老師不裝 App,通常上完課用 LINE 跟你說——就在這裡補登,漏掉的課不會安靜地不見。" },
     { id: "makeup", icon: "calplus", title: "補課與加課", sum: "不在每週時段上的課,排一堂臨時課;簽到時照樣扣堂。",
       steps: ["學生請假後,在今日頁長按他,選「安排補課…」:學生和班級都已帶好",
@@ -2346,7 +2362,9 @@ if (typeof module !== "undefined") module.exports = R;
         '</span></span><span class="cap">' + range(p.spec.startMin, p.spec.endMin) + (p.spec.classId ? " · " + esc(p.spec.className) : "") +
         '</span><span class="btns"><button type="button" class="xs" data-act="attend"' + data + '>已上課</button>' +
         '<button type="button" class="bordered xs" data-act="leave"' + data + '>請假</button>' +
-        '<button type="button" class="bordered xs" data-act="cancel"' + data + ">老師取消</button></span></div>";
+        '<button type="button" class="bordered xs" data-act="cancel"' + data + ">老師取消</button>" +
+        (student(p.spec.studentId).isTrial ? "" : '<button type="button" class="bordered xs" data-act="noShow"' + data + ">缺席</button>") +
+        "</span></div>";
     }).join(""), "外聘老師不裝 App,上完課用 LINE 或口頭回報,再到這裡補登。沒有這份清單,漏登的那幾堂會安靜地不見——月底對帳才發現。")
       : unavailable("check", "沒有待確認的課", "過去 14 天排的課都已經處理過了") });
   }
@@ -2364,9 +2382,13 @@ if (typeof module !== "undefined") module.exports = R;
     if (!f) return;
     var data = ' data-day="' + row.getAttribute("data-day") + '" data-slot="' + row.getAttribute("data-slot") + '" data-sid="' + row.getAttribute("data-sid") + '"';
     var rec = R.recordAt(S, f.spec.studentId, f.at), items = [];
-    if (!rec || rec.status === "planned") {
+    if (!rec || rec.status === "planned" || rec.noShow) {
       items.push({ label: "學生請假(不扣堂)", act: "leave", data: data },
                  { label: "老師取消(不扣堂)", act: "cancel", data: data });
+    }
+    // 缺席:帳上等同上課(扣堂)。體驗課不收費,沒有這一項;未來的課還沒發生,也沒有
+    if ((!rec || rec.status === "planned") && !student(f.spec.studentId).isTrial && R.sod(f.day) <= T) {
+      items.push({ label: "學生缺席(扣堂)", act: "noShow", data: data });
     }
     if (rec && (rec.status === "leave" || rec.status === "teacherCancel") && !f.spec.extraId) {
       // 預設排在隔天、同一時間:同一天同一時間就是請假的那一堂,一打開就會撞課
@@ -2407,7 +2429,7 @@ if (typeof module !== "undefined") module.exports = R;
     var rows = [["日期", "時間", "學生", "班級", "狀態", "認列", "授課老師", "應付外聘"]];
     S.sessions.slice().sort(function (a, b) { return a.at - b.at; }).forEach(function (s) {
       var st = student(s.studentId), c = s.classId ? klass(s.classId) : null, t = s.teacherId ? teacher(s.teacherId) : null;
-      var status = s.status === "attended" ? (s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課" : "已上課")
+      var status = s.status === "attended" ? (s.noShow ? "缺席(扣堂)" : s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課" : "已上課")
         : s.status === "planned" ? "未上" : s.status === "leave" ? "請假" : "老師取消";
       rows.push([iso(s.at), hm(s.at), st.name, c ? c.name : (s.classId ? "(已刪除的團班)" : ""), status, s.price, t ? t.name : "我", s.payout]);
     });
@@ -2740,6 +2762,16 @@ if (typeof module !== "undefined") module.exports = R;
     // 一對一:點 = 扣堂 + 跳出分享卡。團課用「全部簽到」後再逐一開卡,免得連續彈出多張。
     if (!f.spec.classId) openCard(s.id);
   }
+  /** 缺席:扣堂,但不跳回報卡 */
+  function doNoShow(el, after) {
+    var f = findSpec(el.getAttribute("data-day"), el.getAttribute("data-slot"), el.getAttribute("data-sid"));
+    if (!f) return;
+    var s = R.attend(S, f.spec, f.at, true);
+    if (!s) return toast("這堂已經登記過了");
+    render();
+    if (after === "pending") openPending(); else closeSheet();
+    toast(s.packageId ? "已記為缺席,扣一堂" : "已記為缺席,沒有可用的堂數包,記為欠堂");
+  }
   function doMark(el, status, after) {
     var f = findSpec(el.getAttribute("data-day"), el.getAttribute("data-slot"), el.getAttribute("data-sid"));
     if (!f) return;
@@ -2832,6 +2864,7 @@ if (typeof module !== "undefined") module.exports = R;
       case "attend": doAttend(b, b.getAttribute("data-from")); break;
       case "leave": doMark(b, "leave", b.getAttribute("data-from")); break;
       case "cancel": doMark(b, "teacherCancel", b.getAttribute("data-from")); break;
+      case "noShow": doNoShow(b, b.getAttribute("data-from")); break;
       case "attendAll":
         var day = fromIso(b.getAttribute("data-day")), key = b.getAttribute("data-key"), n = 0;
         R.daySpecs(S, day).forEach(function (sp) { if (R.groupKey(sp) === key && R.attend(S, sp, R.atTime(day, sp.start))) n++; });
