@@ -319,5 +319,33 @@ function spec(sid, start, end, extra) {
   eq("體驗課沒有留下紀錄", S.sessions.filter(function (x) { return x.studentId === "qing"; }).length, 0);
 })();
 
+(function () {
+  // 單堂調課:原本那一堂 rescheduled,新的時間一堂預定的臨時課,互相指向
+  var S = base();
+  S.packages = [pkg("p1", "an", 10, 8000)];
+  S.slots = [{ id: "sl1", dow: T.getDay(), start: "16:00", minutes: 60, studentId: "an", classId: null, teacherId: null }];
+  var from = R.atTime(T, "16:00"), to = R.atTime(day(1), "10:30");
+  var r = R.reschedule(S, { studentId: "an", from: from, at: to, minutes: 45 });
+  eq("調課成功", !!r.session, true);
+  eq("原本那一堂", [r.original.status, r.original.linkId], ["rescheduled", r.session.id]);
+  eq("新的那一堂", [r.session.status, r.session.linkId, r.session.kind, r.session.minutes], ["planned", r.original.id, "regular", 45]);
+  eq("不扣堂", R.balance(S, "an", T).net, 10);
+  eq("原本那天:今日頁仍列出、實際要上的課沒有它", [R.daySpecs(S, T).length, R.activeSpecs(S, T).length], [1, 0]);
+  eq("原本那天的課量", R.dayLoad(S, T).total, 0);
+  eq("新的那天多一堂", R.dayLoad(S, day(1)).total, 1);
+  eq("不能簽到調走的課", R.attend(S, R.daySpecs(S, T)[0], from), null);
+  eq("同一堂不能再調", R.reschedule(S, { studentId: "an", from: from, at: R.atTime(day(2), "10:00") }).error, "alreadyMoved");
+  eq("撞到已排的課", R.reschedule(S, { studentId: "an", from: R.atTime(day(7), "16:00"), at: to }).error, "slotTaken");
+  var s = R.attend(S, R.daySpecs(S, day(1))[0], to);
+  eq("新的那一堂簽到扣堂", [s.status, R.balance(S, "an", T).net], ["attended", 9]);
+  eq("已上課不能取消調課", R.cancelReschedule(S, r.original.id), false);
+  R.undo(S, s.id);
+  eq("從原本那一堂取消:兩筆都收回", [R.cancelReschedule(S, r.original.id), S.sessions.length], [true, 0]);
+  r = R.reschedule(S, { studentId: "an", from: from, at: to });
+  eq("從新的那一堂刪除:原本那一堂也回來", [R.cancelExtra(S, r.session.id), S.sessions.length], [true, 0]);
+  R.attend(S, R.daySpecs(S, T)[0], from);
+  eq("已簽到的課不能調", R.reschedule(S, { studentId: "an", from: from, at: to }).error, "attendedCannotMove");
+})();
+
 print("\n" + pass + " 通過," + fail + " 失敗");
 if (fail > 0) throw new Error(fail + " 項失敗");

@@ -177,12 +177,54 @@ var R = (function () {
     S.sessions.push(s);
     return { session: s };
   }
-  /** 取消臨時課:整筆刪掉。已上課的不行,要先撤銷簽到。 */
+  /** 取消臨時課:整筆刪掉。已上課的不行,要先撤銷簽到。調課排出來的那一堂連原本那一堂一起收回。 */
   function cancelExtra(S, id) {
     var s = byId(S.sessions, id);
     if (!s || s.status === "attended") return false;
+    if (s.linkId) return cancelReschedule(S, id);
     S.sessions = S.sessions.filter(function (x) { return x.id !== id; });
     return true;
+  }
+
+  /** 單堂調課:原本那一堂記成 rescheduled(不扣、不算請假),新的時間排一堂預定的臨時課,兩筆互相指向。
+   *  每週時段不動。只做個別課。(LedgerService.reschedule) */
+  function reschedule(S, o) {
+    var ex = recordAt(S, o.studentId, o.from);
+    if (ex && ex.status === "attended") return { error: "attendedCannotMove" };
+    if (ex && ex.status === "rescheduled") return { error: "alreadyMoved" };
+    var r = scheduleExtra(S, { studentId: o.studentId, at: o.at, minutes: o.minutes, kind: "regular",
+      teacherId: o.teacherId || null });
+    if (r.error) return r;
+    var orig = ex;
+    if (!orig) {
+      orig = { id: newId("s"), studentId: o.studentId, at: o.from, slotId: o.slotId || null, classId: null,
+        kind: "regular", price: 0, packageId: null, teacherId: o.teacherId || null, payout: 0,
+        signature: null, signer: "" };
+      S.sessions.push(orig);
+    }
+    orig.status = "rescheduled"; orig.packageId = null; orig.price = 0; orig.payout = 0; orig.noShow = false;
+    orig.linkId = r.session.id; r.session.linkId = orig.id;
+    return { session: r.session, original: orig };
+  }
+  /** 取消調課:從哪一半都可以。新的那一堂已上課就不行。(LedgerService.cancelReschedule) */
+  function cancelReschedule(S, id) {
+    var s = byId(S.sessions, id);
+    if (!s) return false;
+    var other = s.linkId ? byId(S.sessions, s.linkId) : null;
+    var newOne = s.status === "rescheduled" ? other : s;
+    if (newOne && newOne.status === "attended") return false;
+    S.sessions = S.sessions.filter(function (x) { return x !== s && x !== other; });
+    return true;
+  }
+  /** 每週時段上的這一堂已經調到別天 */
+  function movedAway(S, sp, day) {
+    if (sp.extraId || sp.classId) return false;
+    var r = recordAt(S, sp.studentId, atTime(day, sp.start));
+    return !!(r && r.status === "rescheduled");
+  }
+  /** 這天真的要上的課:去掉調走的那幾堂(提醒卡、老師課表、月曆格、下次上課用) */
+  function activeSpecs(S, day) {
+    return daySpecs(S, day).filter(function (sp) { return !movedAway(S, sp, day); });
   }
 
   /** 正式的班依班分組;個別課依開始時間分組(同時段 = 一起上)。(LedgerMath.groupLessons) */
@@ -347,7 +389,7 @@ var R = (function () {
     var out = [];
     for (var i = 0; i < nDays; i++) {
       var day = addDays(sod(from), i);
-      var mine = daySpecs(S, day).filter(function (sp) { return (sp.teacherId || null) === (teacherId || null); });
+      var mine = activeSpecs(S, day).filter(function (sp) { return (sp.teacherId || null) === (teacherId || null); });
       if (!mine.length) continue;
       var lines = groupLessons(mine).map(function (g) {
         return { startMin: g.startMin, endMin: g.endMin, isClass: !!g.classId,
@@ -372,8 +414,8 @@ var R = (function () {
   /** 某一天的課量(月曆格)。total 取「應上」與「實際紀錄」較大者——臨時補課會讓紀錄多於預定;
    *  pending 是還沒處理的那幾堂,有的話徽章用強調色。(DayLoad) */
   function dayLoad(S, day) {
-    var specs = daySpecs(S, day), d0 = sod(day).getTime();
-    var recorded = S.sessions.filter(function (s) { return sod(s.at).getTime() === d0; }).length;
+    var specs = activeSpecs(S, day), d0 = sod(day).getTime();
+    var recorded = S.sessions.filter(function (s) { return sod(s.at).getTime() === d0 && s.status !== "rescheduled"; }).length;
     var pend = specs.filter(function (sp) {
       var r = recordAt(S, sp.studentId, atTime(day, sp.start));
       return !r || r.status === "planned";
@@ -509,6 +551,7 @@ var R = (function () {
     daySpecs: daySpecs, groupKey: groupKey, groupLessons: groupLessons, conflicts: conflicts,
     recordAt: recordAt, newId: newId, reserveIds: reserveIds, attend: attend, mark: mark, undo: undo, pending: pending,
     scheduleExtra: scheduleExtra, cancelExtra: cancelExtra,
+    reschedule: reschedule, cancelReschedule: cancelReschedule, movedAway: movedAway, activeSpecs: activeSpecs,
     expiring: expiring, teacherSchedule: teacherSchedule, receiptNumber: receiptNumber,
     monthSummary: monthSummary, dayLoad: dayLoad, studentMonth: studentMonth, reportSummary: reportSummary,
     salutation: salutation, signature: signature,

@@ -550,6 +550,12 @@ button.glass-pro.wide { border-radius: 999px; }
 .sw-btn.teal { background: #0d9488; }
 .sw-btn.orange { background: #ea7a0c; }
 .sw-btn.red { background: #e5383b; }
+/* 結束上課、永久刪除:與「體驗中」同一個珊瑚色(App 的 Brand.coral)。
+   不是系統紅——結束上課資料不會刪,永久刪除還有一道確認 */
+button.row.tbtn.coral { color: var(--coral, #a8344a); }
+.sw-btn.coral { background: var(--coral, #a8344a); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sw-btn.coral { background: #a8344a; } }
+:root[data-theme="dark"] .sw-btn.coral { background: #a8344a; }
 .sw-btn.blue { background: #2563eb; }
 
 /* ContentUnavailableView */

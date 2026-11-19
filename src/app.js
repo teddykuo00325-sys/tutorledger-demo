@@ -278,7 +278,7 @@
     var specs = R.daySpecs(S, day), allows = R.sod(day) <= T;
     if (!specs.length) return unavailable("cup", "這天沒有排課", "到「學生」頁為學生設定每週時段");
     var h = "";
-    var cf = R.conflicts(specs);
+    var cf = R.conflicts(specs.filter(function (sp) { return !R.movedAway(S, sp, day); }));
     if (cf.length) {
       h += group('<span class="warn-h">' + icon("warn") + "排課衝突</span>", cf.map(function (c) {
         var t = c.kind === "student" ? esc(c.name) + " 同時被排了兩堂,簽到會扣兩堂"
@@ -306,11 +306,12 @@
     var b = R.balance(S, sp.studentId, NOW);
     // 「預定」(排好的臨時課)跟沒登記一樣:還要簽到或請假
     var open = !rec || rec.status === "planned";
+    var moved = rec && rec.status === "rescheduled";
     var status = !open ? (rec.status === "attended" ? (rec.noShow ? "缺席(扣堂)" : rec.kind === "trial" ? "試上 ✓" : "已上課 ✓")
-      : rec.status === "leave" ? "請假" : "老師取消") : (allows ? "" : "預定");
+      : moved ? movedText(rec) : rec.status === "leave" ? "請假" : "老師取消") : (allows ? "" : "預定");
     var data = ' data-day="' + iso(day) + '" data-slot="' + sp.slotId + '" data-sid="' + sp.studentId + '"';
     // 缺席沒有回報卡可傳(卡上寫的是「今天上課了」)
-    var right = rec && rec.noShow ? ""
+    var right = rec && (rec.noShow || moved) ? ""
       : rec && rec.status === "attended"
       ? '<button type="button" class="bordered sm" data-act="card" data-sess="' + rec.id + '">回報卡</button>'
       : (open && allows ? '<button type="button" class="sm" data-act="attend"' + data + ">簽到</button>" : "");
@@ -318,7 +319,8 @@
     var line = st.isTrial ? "體驗課試上中" : R.balanceText(b), warn = !st.isTrial && attention(b);
     var absent = rec && (rec.status === "leave" || rec.status === "teacherCancel");
     // 長按:沒登記 → 請假/取消;請假後 → 安排補課;臨時課還沒上 → 刪除
-    var lp = (open && allows) || (absent && !sp.extraId) || (sp.extraId && rec && rec.status !== "attended") || (rec && rec.noShow);
+    var lp = (open && allows) || (absent && !sp.extraId) || (sp.extraId && rec && rec.status !== "attended") || (rec && rec.noShow)
+      || moved || (!sp.extraId && !sp.classId && !(rec && rec.status === "attended"));
     var badge = sp.extraId && rec ? ' <span class="cap-pill">' + extraLabel(rec) + "</span>" : "";
     return '<div class="row lesson"' + (lp ? ' data-lp="1"' + data : "") + '><div class="grow">' +
       '<div class="nm hl">' + esc(st.name) + badge + '</div><div class="sub' + (warn ? " red" : "") + '">' +
@@ -327,7 +329,13 @@
   }
 
   /** 「補課」「加課」,算在班上的再加班名(DayLessonsList.extraLabel) */
+  /** 原本那一堂調到哪裡去了 */
+  function movedText(rec) {
+    var to = rec.linkId ? R.byId(S.sessions, rec.linkId) : null;
+    return to ? "已調到 " + (to.at.getMonth() + 1) + "月" + to.at.getDate() + "日 " + hm(to.at) : "已調課";
+  }
   function extraLabel(rec) {
+    if (rec.linkId) return "調課";
     var k = rec.kind === "makeup" ? "補課" : rec.kind === "trial" ? "臨時體驗課" : "加課";
     var c = rec.classId ? R.byId(S.classes, rec.classId) : null;
     return esc(c ? k + " · " + c.name : k);
@@ -436,14 +444,14 @@
       var label = s.status === "attended" ? (s.noShow ? (s.packageId ? "缺席(扣堂)" : "缺席(欠堂)") : s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課 ✓"
           : (s.packageId ? "已上課 ✓" : "已上課(欠堂)"))
         : s.status === "planned" ? (s.at > NOW ? (s.kind === "makeup" ? "預定補課" : "預定") : "未上")
-        : s.status === "leave" ? "請假" : "老師取消";
+        : s.status === "rescheduled" ? "調課(改到別天)" : s.status === "leave" ? "請假" : "老師取消";
       var body = '<div class="row"><span class="grow">' + dateTimeText(s.at) + "</span>" +
         (s.signature ? '<span class="accent">' + icon("sign") + "</span>" : "") +
         '<span class="cap' + (s.status === "attended" ? " strong" : "") + '">' + label + "</span></div>";
       return s.status === "attended" ? swipeRow(body, "", swBtn("撤銷", "orange", "undo", ' data-sess="' + s.id + '"')) : body;
     }).join("") : '<div class="row dim">還沒有紀錄</div>');
 
-    h += group("", rowBtn("結束上課(移至教過的學生)", "archive", "endTeaching", ' data-arg="' + sid + '"'),
+    h += group("", rowBtn("結束上課(移至教過的學生)", "archive", "endTeaching", ' data-arg="' + sid + '"', "coral"),
       "學生會從名冊與今日頁移到「教過的學生」,堂數包與上課紀錄全部保留,報表仍會計入。真正的刪除只能在「教過的學生」裡執行。");
     return { title: st.name, right: textBtn("編輯", "form", ' data-v="editStudent" data-arg="' + sid + '"'), html: h };
   }
@@ -465,7 +473,7 @@
         var body = '<div class="row stack"><span class="nm hl">' + esc(x.st.name) + '</span><span class="cap">上過 ' + x.n +
           " 堂 · 累計收款 " + money(x.collected) + '</span><span class="cap">' +
           (x.last ? "最後上課 " + dateText(x.last) : "從未上課 · 結束於 " + dateText(x.st.archivedAt)) + "</span></div>";
-        return swipeRow(body, "", swBtn("永久刪除", "red", "deleteStudent", ' data-arg="' + x.st.id + '"') +
+        return swipeRow(body, "", swBtn("永久刪除", "coral", "deleteStudent", ' data-arg="' + x.st.id + '"') +
           swBtn("恢復", "blue", "restore", ' data-arg="' + x.st.id + '"'));
       }).join(""));
     }).join("");
@@ -510,7 +518,7 @@
         : swBtn("退班", "orange", "leaveClass", ' data-arg="' + cid + '" data-sid="' + st.id + '"'));
     }).join("") + rowBtn("加入學生", "personPlus", "form", ' data-v="addMember" data-arg="' + cid + '"'),
       "退班不會刪除任何資料——退班前上掉的課與收款都留著,只是從那天之後不再排課。");
-    h += group("", rowBtn("結束這個團班", "archive", "endClass", ' data-arg="' + cid + '"'),
+    h += group("", rowBtn("結束這個團班", "archive", "endClass", ' data-arg="' + cid + '"', "coral"),
       "班會從團班列表與今日頁移到「教過的團班」,時段、成員名單、上課紀錄與收款全部保留,之後可以恢復。真正的刪除只能在「教過的團班」裡執行。");
     return { title: c.name, right: textBtn("編輯", "form", ' data-v="editClass" data-arg="' + cid + '"'), html: h };
   }
@@ -529,7 +537,7 @@
       var body = '<div class="row stack"><span class="nm hl">' + esc(c.name) + ' <span class="cap-inline">' + esc(c.subject) +
         '</span></span><span class="cap">上過 ' + done.length + " 人次 · " + c.members.length + " 位學生待過 · 單堂 " + money(c.price) +
         '</span><span class="cap">' + (last ? "最後上課 " + dateText(last) : "從未上課 · 結束於 " + dateText(c.archivedAt)) + "</span></div>";
-      return swipeRow(body, "", swBtn("永久刪除", "red", "deleteClass", ' data-arg="' + c.id + '"') +
+      return swipeRow(body, "", swBtn("永久刪除", "coral", "deleteClass", ' data-arg="' + c.id + '"') +
         swBtn("恢復", "blue", "restoreClass", ' data-arg="' + c.id + '"'));
     }).join("")) };
   }
@@ -680,7 +688,7 @@
   function nextLesson(sid, after) {
     for (var i = 0; i <= 14; i++) {
       var day = R.addDays(R.sod(after), i);
-      var hit = R.daySpecs(S, day).filter(function (sp) { return sp.studentId === sid && R.atTime(day, sp.start) > after; })
+      var hit = R.activeSpecs(S, day).filter(function (sp) { return sp.studentId === sid && R.atTime(day, sp.start) > after; })
         .sort(function (a, b) { return a.startMin - b.startMin; })[0];
       if (hit) return R.atTime(day, hit.start);
     }
@@ -748,7 +756,7 @@
   // ---- 今日提醒與課前提醒(ReminderCardView) ----
   function openReminders() {
     var seen = {}, list = [];
-    R.daySpecs(S, T).sort(function (a, b) { return a.startMin - b.startMin; }).forEach(function (sp) {
+    R.activeSpecs(S, T).sort(function (a, b) { return a.startMin - b.startMin; }).forEach(function (sp) {
       if (seen[sp.studentId]) return; seen[sp.studentId] = true; list.push(sp);
     });
     openSheet({ title: "今日提醒", right: DONE, body: list.length ? group("", list.map(function (sp) {
@@ -863,6 +871,12 @@
         "不上了:長按那一堂,選「刪除這堂臨時課」"],
       where: "今日頁右上角,或長按請假的學生",
       note: "補課與加課都扣堂,分開記是為了對帳頁的「其中補課」。時間過了還沒登記,會進「待確認」。" },
+    { id: "move", icon: "calplus", title: "調課", sum: "只把某一堂移到別的時間,每週時段不變。",
+      steps: ["在今日頁(或月曆的那一天)長按學生,選「調課…」", "選要改到的日期與時間,按「儲存」",
+        "原本那一堂會寫「已調到…」:不扣堂、不算請假", "新的時間那天會出現一堂標著「調課」的課,照常簽到扣堂",
+        "不調了:長按任一堂,選「取消調課」,回到原本的時間"],
+      where: "今日頁或月曆,長按學生",
+      note: "要長期換時間(例如以後都改週五),到學生頁「編輯」改每週時段。團班的課要整班一起移,目前請用請假與補課。" },
     { id: "remind", icon: "bell", title: "課前提醒", sum: "上課前傳一張提醒小卡給家長。",
       steps: ["按今日頁右上角的鈴鐺", "選一位學生,看到他自己的提醒卡", "按「分享給家長」"],
       where: "今日頁右上角", note: "一位學生一張,不做全班總表:列出全班的卡送給任一位家長,等於把其他孩子的名字送出去。" },
@@ -947,6 +961,11 @@
     if (!f) return;
     var data = ' data-day="' + row.getAttribute("data-day") + '" data-slot="' + row.getAttribute("data-slot") + '" data-sid="' + row.getAttribute("data-sid") + '"';
     var rec = R.recordAt(S, f.spec.studentId, f.at), items = [];
+    if (rec && rec.status === "rescheduled") {
+      // 已經調走的課:只能整個取消調課,回到原本的時間
+      items.push({ label: "取消調課(回到原本時間)", act: "cancelMove", data: ' data-sess="' + rec.id + '"' });
+      return openActions(f.spec.name + " · " + range(f.spec.startMin, f.spec.endMin), movedText(rec), items);
+    }
     if (!rec || rec.status === "planned" || rec.noShow) {
       items.push({ label: "學生請假(不扣堂)", act: "leave", data: data },
                  { label: "老師取消(不扣堂)", act: "cancel", data: data });
@@ -961,8 +980,16 @@
       items.push({ label: "安排補課…", act: "extra", data: ' data-sid="' + f.spec.studentId + '" data-day="' + iso(next) +
         '" data-start="' + f.spec.start + '" data-min="' + (f.spec.endMin - f.spec.startMin) + '" data-cls="' + (f.spec.classId || "") + '"' });
     }
+    // 調課:每週時段上的個別課,還沒上。團班的一堂是整班一起移,不在這裡做
+    if (!f.spec.extraId && !f.spec.classId && !(rec && rec.status === "attended")) {
+      var nx = R.addDays(R.sod(f.day) > T ? R.sod(f.day) : T, 1);
+      items.push({ label: "調課…", act: "move", data: ' data-sid="' + f.spec.studentId + '" data-day="' + iso(nx) +
+        '" data-start="' + f.spec.start + '" data-min="' + (f.spec.endMin - f.spec.startMin) + '" data-from="' + iso(f.day) +
+        '" data-teacher="' + (f.spec.teacherId || "") + '" data-slot="' + f.spec.slotId + '"' });
+    }
     if (f.spec.extraId && rec && rec.status !== "attended") {
-      items.push({ label: "刪除這堂臨時課", act: "cancelExtra", red: true, data: ' data-sess="' + rec.id + '"' });
+      items.push(rec.linkId ? { label: "取消調課(回到原本時間)", act: "cancelMove", data: ' data-sess="' + rec.id + '"' }
+        : { label: "刪除這堂臨時課", act: "cancelExtra", red: true, data: ' data-sess="' + rec.id + '"' });
     }
     openActions(f.spec.name + " · " + range(f.spec.startMin, f.spec.endMin), "", items);
   }
@@ -981,6 +1008,18 @@
         "算在班上:用班級單價、扣這個班的堂數包、由班上的老師授課。") : "") +
       when("cls=", group("", picker("teacher", "授課老師", teacherOpts(), "me"))));
   }
+  /** 調課:只移這一堂,每週時段不變(ExtraLessonSheet 的調課模式) */
+  function openMove(d) {
+    var st = student(d.studentId);
+    formSheet("move", "調課",
+      '<input type="hidden" name="sid" value="' + d.studentId + '"><input type="hidden" name="from" value="' + d.from +
+        '"><input type="hidden" name="fromStart" value="' + d.start + '"><input type="hidden" name="slot" value="' + d.slotId + '">' +
+      group("", lc("學生", esc(st.name)) + lc("原本", dateText(d.fromDay) + " " + d.start),
+        "只移這一堂,每週時段不變。原本那一堂不扣堂、不算請假;新的時間照常簽到扣堂。") +
+      group("", dateField("date", "改到", iso(d.day)) + timeField("start", "開始時間", d.start) +
+        picker("min", "單堂時長", durOpts(), d.minutes || 60)) +
+      group("", picker("teacher", "授課老師", teacherOpts(), d.teacherId || "me")));
+  }
   /** 學生目前在上的班 */
   function classesOf(sid) {
     return S.classes.filter(function (c) {
@@ -995,7 +1034,7 @@
     S.sessions.slice().sort(function (a, b) { return a.at - b.at; }).forEach(function (s) {
       var st = student(s.studentId), c = s.classId ? klass(s.classId) : null, t = s.teacherId ? teacher(s.teacherId) : null;
       var status = s.status === "attended" ? (s.noShow ? "缺席(扣堂)" : s.kind === "trial" ? "試上" : s.kind === "makeup" ? "補課" : "已上課")
-        : s.status === "planned" ? "未上" : s.status === "leave" ? "請假" : "老師取消";
+        : s.status === "planned" ? "未上" : s.status === "rescheduled" ? "調課(改到別天)" : s.status === "leave" ? "請假" : "老師取消";
       rows.push([iso(s.at), hm(s.at), st.name, c ? c.name : (s.classId ? "(已刪除的團班)" : ""), status, s.price, t ? t.name : "我", s.payout]);
     });
     return rows.map(function (r) { return r.map(function (x) {
@@ -1240,6 +1279,17 @@
       closeSheet(); render();
       return toast("已排好 " + (xd.getMonth() + 1) + "月" + xd.getDate() + "日 " + hm(xd) + " 的" + extraLabel(r.session));
     }
+    if (f === "move") {
+      var md = fromIso(v.date) || T, ms = R.toMin(v.start || "18:00"), mf = fromIso(v.from), mfs = R.toMin(v.fromStart);
+      md.setHours(Math.floor(ms / 60), ms % 60, 0, 0);
+      mf.setHours(Math.floor(mfs / 60), mfs % 60, 0, 0);
+      var mr = R.reschedule(S, { studentId: v.sid, from: mf, at: md, minutes: num(v.min) || 60, slotId: v.slot,
+        teacherId: v.teacher === "me" ? null : v.teacher });
+      if (mr.error) return toast(mr.error === "slotTaken" ? student(v.sid).name + "這個時間已經有一堂課了,請換個時間"
+        : mr.error === "attendedCannotMove" ? "這一堂已經簽到了,要先撤銷簽到才能調課" : "這一堂已經調過了");
+      closeSheet(); render();
+      return toast("已調到 " + (md.getMonth() + 1) + "月" + md.getDate() + "日 " + hm(md));
+    }
     if (f === "addStudent") {
       if (!v.name) return toast("請輸入姓名");
       var id = R.newId("st");
@@ -1439,6 +1489,18 @@
         openExtra({ studentId: b.getAttribute("data-sid") || "", day: fromIso(b.getAttribute("data-day")) || T,
           start: b.getAttribute("data-start") || nextWholeHour(), minutes: num(b.getAttribute("data-min")) || 60,
           kind: "makeup", classId: b.getAttribute("data-cls") || "" });
+        break;
+      case "move":
+        closeSheet();
+        openMove({ studentId: b.getAttribute("data-sid"), day: fromIso(b.getAttribute("data-day")) || T,
+          fromDay: fromIso(b.getAttribute("data-from")), from: b.getAttribute("data-from"),
+          start: b.getAttribute("data-start"), minutes: num(b.getAttribute("data-min")) || 60,
+          teacherId: b.getAttribute("data-teacher") || "", slotId: b.getAttribute("data-slot") });
+        break;
+      case "cancelMove":
+        closeSheet();
+        if (R.cancelReschedule(S, b.getAttribute("data-sess"))) { render(); toast("已取消調課,回到原本的時間"); }
+        else toast("新的那一堂已經上過了,要先到學生頁撤銷簽到");
         break;
       case "cancelExtra":
         closeSheet();
