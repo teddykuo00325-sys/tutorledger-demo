@@ -37,7 +37,8 @@
       teachers: [
         { id: "me", name: "我", isSelf: true },
         { id: "chen", name: "陳老師", mode: "share", sharePct: 50 },
-        { id: "lin", name: "林老師", mode: "hourly", hourly: 500 }
+        { id: "lin", name: "林老師", mode: "hourly", hourly: 500,
+          items: [{ id: "lin-vn", name: "小提琴", mode: "hourly", hourly: 600 }, { id: "lin-th", name: "樂理", mode: "hourly", hourly: 400 }] }
       ],
       students: [
         St("an", "小安", "鋼琴", 800, "媽媽", "0912-345-678",
@@ -54,7 +55,7 @@
       slots: [
         { id: "sl-an", dow: wd(0), start: "16:00", minutes: 60, studentId: "an", classId: null, teacherId: null },
         { id: "sl-kids1", dow: wd(0), start: "17:00", minutes: 60, studentId: null, classId: "kids", teacherId: null },
-        { id: "sl-kai", dow: wd(0), start: "19:00", minutes: 60, studentId: "kai", classId: null, teacherId: "lin" },
+        { id: "sl-kai", dow: wd(0), start: "19:00", minutes: 60, studentId: "kai", classId: null, teacherId: "lin", teacherItemId: "lin-vn" },
         { id: "sl-kids2", dow: wd(2), start: "17:00", minutes: 60, studentId: null, classId: "kids", teacherId: null },
         { id: "sl-bo", dow: wd(-1), start: "18:00", minutes: 60, studentId: "bo", classId: null, teacherId: null },
         { id: "sl-qing", dow: wd(1), start: "17:00", minutes: 60, studentId: "qing", classId: null, teacherId: null }
@@ -545,7 +546,9 @@
   function vTeachers() {
     var rows = S.teachers.map(function (t) {
       var body = '<div class="row stack"><span class="nm">' + esc(t.isSelf ? "我自己" : t.name) +
-        (t.isSelf ? ' <span class="cap-pill blue">我</span>' : "") + '</span><span class="cap">' + esc(R.rateText(t)) + "</span></div>";
+        (t.isSelf ? ' <span class="cap-pill blue">我</span>' : "") + '</span><span class="cap">' + (t.items && t.items.length
+          ? t.items.map(function (it) { return esc(it.name + " " + R.rateText(it)); }).join("<br>")
+          : esc(R.rateText(t))) + "</span></div>";
       return swipeRow(body, "", swBtn("課表", "blue", "tcard", ' data-tid="' + t.id + '"'));
     }).join("");
     return { title: "授課老師", html: group("", rows + rowBtn("新增老師", "plus", "form", ' data-v="addTeacher"'),
@@ -620,8 +623,8 @@
       '" placeholder="教室名稱(選填)" maxlength="20" aria-label="教室名稱"></div>' +
       '<div class="row lc dim"><span class="k">回報署名</span><span class="v" id="sigPreview">' + esc(sig()) + "</span></div>");
     h += group("完整版", lc("狀態", "完整版"), "測試階段預設為完整版。上架前會改由 App 內購買決定。");
-    h += group("AI 課後回報", lc("目前引擎", "範本模式") + upcoming("下載裝置端 AI 模型(約 1.1GB)", "W6"),
-      "範本模式不需要模型,現在就能用。裝置端 AI 是把口語筆記潤飾成得體訊息,排在 W6。");
+    h += group("AI 課後回報", lc("目前引擎", "範本模式(網頁示範)"),
+      "iOS App 在支援 Apple Intelligence 的 iPhone 上,可以按麥克風說今天的重點,由手機上的 AI 整理成給家長的話;語音與 AI 都不離開手機。網頁示範版只有範本模式。");
     h += group("資料", rowBtn("備份到「檔案」", "drive", "backup") + rowBtn("從備份還原", "undo", "restorePick") +
       lc("最近一次備份", ui.lastBackupAt ? dateText(ui.lastBackupAt) + " " + hm(ui.lastBackupAt) : "還沒有備份過") +
       (isEmptyLedger() ? rowBtn("載入示範資料", "sparkle", "demoLoad")
@@ -694,7 +697,7 @@
     }
     return null;
   }
-  /** 範本模式的回報(ReportTemplate.render 的「既定進度」版)。iOS 版之後會用語音 + AI。 */
+  /** 範本模式的回報(ReportTemplate.render 的「既定進度」版)。iOS 版另有語音 + 裝置端 AI(AppleFMPolisher)。 */
   function defaultReport(s) {
     var st = student(s.studentId);
     return R.salutation(st) + "您好：今天" + st.subject + "課練習了既定進度。" + sig();
@@ -724,7 +727,7 @@
   function openCard(sid) {
     var s = R.byId(S.sessions, sid);
     openSheet({ title: "課後回報", right: DONE, body: reportCardHtml(s) +
-      '<div class="field-card"><textarea id="reportText" data-sess="' + s.id + '" rows="3" aria-label="課後短評" placeholder="課後短評(之後可用語音+AI 生成)">' +
+      '<div class="field-card"><textarea id="reportText" data-sess="' + s.id + '" rows="3" aria-label="課後短評" placeholder="給家長的話(App 版可以用說的,再由手機上的 AI 整理)">' +
       esc(s.report === undefined ? defaultReport(s) : s.report) + "</textarea></div>" +
       (s.signature ? fullBtn("清除簽名", "undo", "clearSig", ' data-sess="' + s.id + '"', "red")
         : fullBtn("請家長簽名", "sign", "sign", ' data-kind="session" data-id="' + s.id + '"')) +
@@ -985,7 +988,7 @@
       var nx = R.addDays(R.sod(f.day) > T ? R.sod(f.day) : T, 1);
       items.push({ label: "調課…", act: "move", data: ' data-sid="' + f.spec.studentId + '" data-day="' + iso(nx) +
         '" data-start="' + f.spec.start + '" data-min="' + (f.spec.endMin - f.spec.startMin) + '" data-from="' + iso(f.day) +
-        '" data-teacher="' + (f.spec.teacherId || "") + '" data-slot="' + f.spec.slotId + '"' });
+        '" data-teacher="' + (f.spec.teacherId || "") + '" data-item="' + (f.spec.teacherItemId || "") + '" data-slot="' + f.spec.slotId + '"' });
     }
     if (f.spec.extraId && rec && rec.status !== "attended") {
       items.push(rec.linkId ? { label: "取消調課(回到原本時間)", act: "cancelMove", data: ' data-sess="' + rec.id + '"' }
@@ -1006,7 +1009,18 @@
         picker("min", "單堂時長", durOpts(), d.minutes || 60)) +
       (mine.length ? group("", picker("cls", "算在", [["", "個別課"]].concat(mine.map(function (c) { return [c.id, c.name]; })), d.classId || ""),
         "算在班上:用班級單價、扣這個班的堂數包、由班上的老師授課。") : "") +
-      when("cls=", group("", picker("teacher", "授課老師", teacherOpts(), "me"))));
+      when("cls=", group("", picker("teacher", "授課老師", teacherOpts(), "me") + itemPickers("teacher", "", null, null))) +
+      studs.map(function (x) { return when("sid=" + x.id, suggestGroup(x.id, null, d.minutes || 60, d.day || T)); }).join(""));
+  }
+  /** 推薦時間(三個空檔,點一下填進日期與時間)。規則在 R.suggest */
+  function suggestGroup(sid, teacherId, minutes, from) {
+    var list = R.suggest(S, sid, teacherId, minutes, from, NOW);
+    if (!list.length) return "";
+    return group('<span class="warn-h">' + icon("calplus") + "推薦時間</span>", list.map(function (at) {
+      var rel = R.sod(at).getTime() === T.getTime() ? "今天" : R.sod(at).getTime() === R.addDays(T, 1).getTime() ? "明天" : WEEK[at.getDay()];
+      return rowBtn((at.getMonth() + 1) + "月" + at.getDate() + "日(" + rel + ") " + hm(at), "", "pickSuggest",
+        ' data-date="' + iso(at) + '" data-start="' + hm(at) + '"');
+    }).join(""), "避開" + esc(student(sid).name) + "與授課老師當天的其他課,優先挑他平常上課的時間。點一下就填好,也可以自己改。");
   }
   /** 調課:只移這一堂,每週時段不變(ExtraLessonSheet 的調課模式) */
   function openMove(d) {
@@ -1018,7 +1032,9 @@
         "只移這一堂,每週時段不變。原本那一堂不扣堂、不算請假;新的時間照常簽到扣堂。") +
       group("", dateField("date", "改到", iso(d.day)) + timeField("start", "開始時間", d.start) +
         picker("min", "單堂時長", durOpts(), d.minutes || 60)) +
-      group("", picker("teacher", "授課老師", teacherOpts(), d.teacherId || "me")));
+      group("", picker("teacher", "授課老師", teacherOpts(), d.teacherId || "me") +
+        itemPickers("teacher", "", d.teacherId || null, d.teacherItemId || null)) +
+      suggestGroup(d.studentId, d.teacherId || null, d.minutes || 60, d.day));
   }
   /** 學生目前在上的班 */
   function classesOf(sid) {
@@ -1126,9 +1142,22 @@
     var hired = S.teachers.filter(function (t) { return !t.isSelf && (!t.archivedAt || t.id === sl.teacherId); });
     if (!hired.length) return "";
     return picker(prefix + "teacher", "授課老師", [["me", "我自己"]].concat(hired.map(function (t) { return [t.id, t.name]; })),
-      sl.teacherId || "me");
+      sl.teacherId || "me") + itemPickers(prefix + "teacher", prefix, sl.teacherId, sl.teacherItemId);
   }
   function teacherOf(v) { return v && v !== "me" ? v : null; }
+  /** 授課項目選單(TeacherItemPicker):每位有項目的老師各一份,只在選了那位老師時顯示 */
+  function itemPickers(teacherField, prefix, teacherId, itemId) {
+    return S.teachers.filter(function (t) { return !t.isSelf && t.items && t.items.length; }).map(function (t) {
+      return when(teacherField + "=" + t.id, picker(prefix + "item_" + t.id, "授課項目",
+        [["", "不指定(" + R.rateText(t) + ")"]].concat(t.items.map(function (it) { return [it.id, it.name + "・" + R.rateText(it)]; })),
+        t.id === teacherId ? (itemId || "") : ""));
+    }).join("");
+  }
+  /** 讀回選的項目(選了哪位老師,就讀那位老師的那一份) */
+  function itemOfForm(v, teacherField, prefix) {
+    var t = teacherOf(v[teacherField]);
+    return t ? (v[prefix + "item_" + t] || null) : null;
+  }
   function guardianEditor(st) {
     return textField("guardian", "稱謂(例：媽媽)", st.guardianTitle) + textField("phone", "電話", st.phone, ' inputmode="tel"') +
       areaField("note", "備註", st.note);
@@ -1206,7 +1235,7 @@
         group("班級資料", textField("name", "班名(例：週三兒童鋼琴班)", "", ' maxlength="16"') + textField("subject", "科目", "鋼琴") +
           stepper("price", "單堂價格", 600, 100, 5000, 50, "NT$"), "價格跟著班走:這一班每位學生每堂都用這個價。") +
         group("每週時段", slotEditor("", { dow: T.getDay(), start: "18:00", minutes: 60 })) +
-        group("", picker("teacher", "授課老師", teacherOpts(), "me"),
+        group("", picker("teacher", "授課老師", teacherOpts(), "me") + itemPickers("teacher", "", null, null),
           "指定外聘老師後,這個班的每一堂都會依他的拆帳方式算出應付,並在對帳頁列出。"));
     },
     editClass: function (cid) {
@@ -1214,7 +1243,8 @@
       formSheet("editClass", "編輯團班", '<input type="hidden" name="cid" value="' + cid + '">' +
         group("班級資料", textField("name", "班名", c.name, ' maxlength="16"') + textField("subject", "科目", c.subject) +
           stepper("price", "單堂價格", c.price, 100, 5000, 50, "NT$"), "改價只影響之後的課。已上掉的課記的是當時的單價,不會被改寫。") +
-        group("", picker("teacher", "授課老師", teacherOpts(), c.teacherId || "me"),
+        group("", picker("teacher", "授課老師", teacherOpts(), c.teacherId || "me") +
+          itemPickers("teacher", "", c.teacherId, c.teacherItemId),
           "指定外聘老師後,這個班的每一堂都會依他的拆帳方式算出應付,並在對帳頁列出。改費率只影響之後的課。") +
         slots.map(function (sl, i) {
           return group("時段 " + (i + 1), slotEditor("s" + i, sl) + toggle("s" + i + "del", "刪除這個時段", false));
@@ -1229,12 +1259,20 @@
       }).join("")) : unavailable("person3", "沒有可加入的學生", "名冊上的學生都已經在這個班裡了") });
     },
     addTeacher: function () {
+      var itemGroup = function (n) {
+        return group("授課項目 " + n, textField("i" + n + "name", "項目名稱(例：鋼琴、樂理)", "", ' maxlength="10"') +
+          segField("i" + n + "mode", [["hourly", "鐘點費"], ["share", "比例"]], "hourly") +
+          when("i" + n + "mode=hourly", stepper("i" + n + "hourly", "鐘點費", 600, 0, 5000, 50, "NT$", " / 堂")) +
+          when("i" + n + "mode=share", stepper("i" + n + "share", "比例", 50, 0, 100, 5, "", "%")));
+      };
       formSheet("addTeacher", "新增老師",
         group("", textField("name", "姓名(例：陳老師)", "", ' maxlength="10"')) +
-        group("拆帳", segField("mode", [["hourly", "鐘點費"], ["share", "比例"]], "hourly") +
+        group("預設拆帳(沒指定項目的課)", segField("mode", [["hourly", "鐘點費"], ["share", "比例"]], "hourly") +
           when("mode=hourly", stepper("hourly", "鐘點費", 600, 0, 5000, 50, "NT$", " / 堂")) +
           when("mode=share", stepper("share", "比例", 50, 0, 100, 5, "", "%")),
-          "外聘老師是成年人,姓名留在老師手機即可——不做帳號、不做第二個使用者。"));
+          "外聘老師是成年人,姓名留在老師手機即可——不做帳號、不做第二個使用者。") +
+        itemGroup(1) + itemGroup(2) + itemGroup(3) +
+        '<p class="foot">同一位老師教不同科目、談不同費用時填(例:鋼琴鐘點 600、樂理鐘點 400),沒填名字的項目不會存。排課時選他上哪一項,應付就照那一項算。App 版可以加更多項。</p>');
     }
   };
 
@@ -1274,7 +1312,8 @@
       xd.setHours(Math.floor(xs / 60), xs % 60, 0, 0);
       if (v.cls && !classesOf(v.sid).some(function (c) { return c.id === v.cls; })) return toast(student(v.sid).name + " 不在這個班");
       var r = R.scheduleExtra(S, { studentId: v.sid, at: xd, minutes: num(v.min) || 60, kind: v.kind || "makeup",
-        classId: v.cls || null, teacherId: v.cls || v.teacher === "me" ? null : v.teacher });
+        classId: v.cls || null, teacherId: v.cls || v.teacher === "me" ? null : v.teacher,
+        teacherItemId: v.cls ? null : itemOfForm(v, "teacher", "") });
       if (r.error) return toast(student(v.sid).name + "這個時間已經有一堂課了,請換個時間");
       closeSheet(); render();
       return toast("已排好 " + (xd.getMonth() + 1) + "月" + xd.getDate() + "日 " + hm(xd) + " 的" + extraLabel(r.session));
@@ -1284,7 +1323,7 @@
       md.setHours(Math.floor(ms / 60), ms % 60, 0, 0);
       mf.setHours(Math.floor(mfs / 60), mfs % 60, 0, 0);
       var mr = R.reschedule(S, { studentId: v.sid, from: mf, at: md, minutes: num(v.min) || 60, slotId: v.slot,
-        teacherId: v.teacher === "me" ? null : v.teacher });
+        teacherId: v.teacher === "me" ? null : v.teacher, teacherItemId: itemOfForm(v, "teacher", "") });
       if (mr.error) return toast(mr.error === "slotTaken" ? student(v.sid).name + "這個時間已經有一堂課了,請換個時間"
         : mr.error === "attendedCannotMove" ? "這一堂已經簽到了,要先撤銷簽到才能調課" : "這一堂已經調過了");
       closeSheet(); render();
@@ -1296,7 +1335,7 @@
       S.students.push({ id: id, name: v.name, subject: v.subject || "鋼琴", price: num(v.price), guardianTitle: v.guardian,
         phone: v.phone, note: v.note, statusNote: v.statusNote, isTrial: !!v.trial, trialPrice: num(v.trialPrice), archivedAt: null });
       S.slots.push({ id: R.newId("sl"), dow: num(v.dow), start: v.start || "18:00", minutes: num(v.min) || 60,
-        studentId: id, classId: null, teacherId: teacherOf(v.teacher) });
+        studentId: id, classId: null, teacherId: teacherOf(v.teacher), teacherItemId: itemOfForm(v, "teacher", "") });
       closeSheet(); ui.stack.students = [{ v: "students" }, { v: "student", arg: id }]; ui.tab = "students"; render(true);
       toast("已新增 " + v.name);
     } else if (f === "editStudent") {
@@ -1307,10 +1346,13 @@
       S.slots.filter(function (s) { return s.studentId === v.sid; }).forEach(function (sl, i) {
         if (v["s" + i + "del"]) { S.slots = S.slots.filter(function (x) { return x !== sl; }); return; }
         sl.dow = num(v["s" + i + "dow"]); sl.start = v["s" + i + "start"] || sl.start; sl.minutes = num(v["s" + i + "min"]) || sl.minutes;
-        if (v["s" + i + "teacher"] !== undefined) sl.teacherId = teacherOf(v["s" + i + "teacher"]);
+        if (v["s" + i + "teacher"] !== undefined) {
+          sl.teacherId = teacherOf(v["s" + i + "teacher"]);
+          sl.teacherItemId = itemOfForm(v, "s" + i + "teacher", "s" + i);
+        }
       });
       if (v.addSlot) S.slots.push({ id: R.newId("sl"), dow: num(v.ndow), start: v.nstart || "18:00", minutes: num(v.nmin) || 60,
-        studentId: v.sid, classId: null, teacherId: teacherOf(v.nteacher) });
+        studentId: v.sid, classId: null, teacherId: teacherOf(v.nteacher), teacherItemId: itemOfForm(v, "nteacher", "n") });
       closeSheet(); render(); toast("已儲存");
     } else if (f === "pkg") {
       var mat = v.kind === "material";
@@ -1341,13 +1383,15 @@
       var tid = v.teacher === "me" ? null : v.teacher;
       if (f === "addClass") {
         var cid = R.newId("c");
-        S.classes.push({ id: cid, name: v.name, subject: v.subject, price: num(v.price), teacherId: tid, members: [] });
+        S.classes.push({ id: cid, name: v.name, subject: v.subject, price: num(v.price), teacherId: tid,
+          teacherItemId: itemOfForm(v, "teacher", ""), members: [] });
         S.slots.push({ id: R.newId("sl"), dow: num(v.dow), start: v.start || "18:00", minutes: num(v.min) || 60,
           studentId: null, classId: cid, teacherId: null });
         closeSheet(); ui.stack.students = [{ v: "students" }, { v: "classes" }, { v: "class", arg: cid }]; render(true);
         toast("已建立 " + v.name);
       } else {
         var c = klass(v.cid); c.name = v.name; c.subject = v.subject; c.price = num(v.price); c.teacherId = tid;
+        c.teacherItemId = itemOfForm(v, "teacher", "");
         classSlots(v.cid).forEach(function (sl, i) {
           if (v["s" + i + "del"]) { S.slots = S.slots.filter(function (x) { return x !== sl; }); return; }
           sl.dow = num(v["s" + i + "dow"]); sl.start = v["s" + i + "start"] || sl.start; sl.minutes = num(v["s" + i + "min"]) || sl.minutes;
@@ -1358,7 +1402,11 @@
       }
     } else if (f === "addTeacher") {
       if (!v.name) return toast("請輸入姓名");
-      S.teachers.push({ id: R.newId("t"), name: v.name, mode: v.mode, hourly: num(v.hourly), sharePct: num(v.share) });
+      var items = [1, 2, 3].filter(function (n) { return v["i" + n + "name"]; }).map(function (n) {
+        return { id: R.newId("ti"), name: v["i" + n + "name"], mode: v["i" + n + "mode"] || "hourly",
+          hourly: num(v["i" + n + "hourly"]), sharePct: num(v["i" + n + "share"]) };
+      });
+      S.teachers.push({ id: R.newId("t"), name: v.name, mode: v.mode, hourly: num(v.hourly), sharePct: num(v.share), items: items });
       closeSheet(); render(); toast("已新增 " + v.name);
     }
   }
@@ -1495,7 +1543,15 @@
         openMove({ studentId: b.getAttribute("data-sid"), day: fromIso(b.getAttribute("data-day")) || T,
           fromDay: fromIso(b.getAttribute("data-from")), from: b.getAttribute("data-from"),
           start: b.getAttribute("data-start"), minutes: num(b.getAttribute("data-min")) || 60,
-          teacherId: b.getAttribute("data-teacher") || "", slotId: b.getAttribute("data-slot") });
+          teacherId: b.getAttribute("data-teacher") || "", teacherItemId: b.getAttribute("data-item") || "",
+          slotId: b.getAttribute("data-slot") });
+        break;
+      case "pickSuggest":
+        var sf = b.closest("form");
+        if (sf) {
+          sf.elements.date.value = b.getAttribute("data-date"); sf.elements.start.value = b.getAttribute("data-start");
+          Array.prototype.forEach.call(sf.querySelectorAll('[data-act="pickSuggest"]'), function (x) { x.classList.toggle("picked", x === b); });
+        }
         break;
       case "cancelMove":
         closeSheet();

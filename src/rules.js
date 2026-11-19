@@ -84,10 +84,19 @@ var R = (function () {
   }
 
   // ---------- 老師與拆帳 ----------
-  function payoutFor(teacher, price) {
+  /** 這一堂付老師多少。有指定授課項目(而且是這位老師的)就照那一項,否則照老師的預設拆帳。
+   *  (SDTeacher.payout(itemID:)) */
+  function payoutFor(teacher, price, itemId) {
     if (!teacher || teacher.isSelf) return 0;
-    if (teacher.mode === "share") return Math.round(price * teacher.sharePct / 100);
-    return teacher.hourly;
+    var r = itemOf(teacher, itemId) || teacher;
+    if (r.mode === "share") return Math.round(price * r.sharePct / 100);
+    return r.hourly;
+  }
+  /** 老師的某個授課項目;不屬於他(或被刪了)就是 null */
+  function itemOf(teacher, itemId) {
+    if (!teacher || !itemId || !teacher.items) return null;
+    for (var i = 0; i < teacher.items.length; i++) if (teacher.items[i].id === itemId) return teacher.items[i];
+    return null;
   }
   function rateText(t) {
     if (t.isSelf) return "我自己,不拆帳";
@@ -123,14 +132,15 @@ var R = (function () {
           if (!st || st.archivedAt) return;
           out.push({ slotId: sl.id, studentId: st.id, name: st.name, start: sl.start,
             startMin: startMin, endMin: endMin, classId: c.id, className: c.name,
-            price: c.price, teacherId: c.teacherId || null });
+            price: c.price, teacherId: c.teacherId || null, teacherItemId: c.teacherItemId || null });
         });
       } else {
         var st = byId(S.students, sl.studentId);
         if (!st || st.archivedAt) return;
         out.push({ slotId: sl.id, studentId: st.id, name: st.name, start: sl.start,
           startMin: startMin, endMin: endMin, classId: null, className: "",
-          price: st.isTrial ? st.trialPrice : st.price, teacherId: sl.teacherId || null });
+          price: st.isTrial ? st.trialPrice : st.price, teacherId: sl.teacherId || null,
+          teacherItemId: sl.teacherId ? (sl.teacherItemId || null) : null });
       }
     });
     return out.concat(extraSpecs(S, day, out));
@@ -154,7 +164,8 @@ var R = (function () {
         startMin: startMin, endMin: startMin + (s.minutes || 60), classId: null, className: "",
         chargeClassId: c ? c.id : null,
         price: st.isTrial ? st.trialPrice : (c ? c.price : st.price),
-        teacherId: c ? (c.teacherId || null) : (s.teacherId || null) });
+        teacherId: c ? (c.teacherId || null) : (s.teacherId || null),
+        teacherItemId: c ? (c.teacherItemId || null) : (s.teacherItemId || null) });
     });
     return out;
   }
@@ -173,6 +184,7 @@ var R = (function () {
     var s = { id: newId("s"), studentId: st.id, at: o.at, slotId: null, classId: c ? c.id : null,
       status: "planned", extra: true, kind: st.isTrial ? "trial" : (o.kind || "makeup"), minutes: o.minutes || 60,
       price: 0, packageId: null, teacherId: c ? (c.teacherId || null) : (o.teacherId || null),
+      teacherItemId: c ? (c.teacherItemId || null) : (o.teacherItemId || null),
       payout: 0, signature: null, signer: "" };
     S.sessions.push(s);
     return { session: s };
@@ -193,7 +205,7 @@ var R = (function () {
     if (ex && ex.status === "attended") return { error: "attendedCannotMove" };
     if (ex && ex.status === "rescheduled") return { error: "alreadyMoved" };
     var r = scheduleExtra(S, { studentId: o.studentId, at: o.at, minutes: o.minutes, kind: "regular",
-      teacherId: o.teacherId || null });
+      teacherId: o.teacherId || null, teacherItemId: o.teacherItemId || null });
     if (r.error) return r;
     var orig = ex;
     if (!orig) {
@@ -216,6 +228,51 @@ var R = (function () {
     S.sessions = S.sessions.filter(function (x) { return x !== s && x !== other; });
     return true;
   }
+  /** 推薦空檔:避開這位學生與授課老師當天的其他課,學生平常的時間優先,在所有每週時段的範圍內,
+   *  一天一個、由近到遠最多三個。(SlotSuggestion.suggest / LedgerService.suggestTimes) */
+  function suggest(S, studentId, teacherId, minutes, from, now) {
+    var live = S.slots.filter(function (sl) {
+      var st = sl.studentId ? byId(S.students, sl.studentId) : null, c = sl.classId ? byId(S.classes, sl.classId) : null;
+      return (st && !st.archivedAt) || (c && !c.archivedAt);
+    });
+    var open = 9 * 60, close = 21 * 60;
+    if (live.length) {
+      open = Math.min.apply(null, live.map(function (sl) { return toMin(sl.start); }));
+      close = Math.max.apply(null, live.map(function (sl) { return toMin(sl.start) + sl.minutes; }));
+    }
+    var mineClasses = S.classes.filter(function (c) {
+      return c.members.some(function (m) { return m.studentId === studentId && !m.leftAt; });
+    }).map(function (c) { return c.id; });
+    var pref = [];
+    S.slots.filter(function (sl) { return sl.studentId === studentId || mineClasses.indexOf(sl.classId) >= 0; })
+      .map(function (sl) { return toMin(sl.start); }).sort(function (a, b) { return a - b; })
+      .forEach(function (m) { if (pref.indexOf(m) < 0) pref.push(m); });
+    var out = [], start = sod(from > now ? from : now);
+    for (var i = 0; i < 14 && out.length < 3; i++) {
+      var day = addDays(start, i);
+      var busy = activeSpecs(S, day).filter(function (sp) {
+        return sp.studentId === studentId || (sp.teacherId || null) === (teacherId || null);
+      });
+      var free = function (s) {
+        var e = s + minutes;
+        if (s < open || e > close) return false;
+        if (atTime(day, fromMin(s)) < now) return false;
+        return !busy.some(function (b) { return Math.max(b.startMin, s) < Math.min(b.endMin, e); });
+      };
+      var pick = null;
+      for (var k = 0; k < pref.length; k++) if (free(pref[k])) { pick = pref[k]; break; }
+      if (pick === null) {
+        var anchor = pref.length ? pref[0] : open, best = null;
+        for (var m = open; m + minutes <= close; m += 30) {
+          if (free(m) && (best === null || Math.abs(m - anchor) < Math.abs(best - anchor))) best = m;
+        }
+        pick = best;
+      }
+      if (pick !== null) out.push(atTime(day, fromMin(pick)));
+    }
+    return out;
+  }
+
   /** 每週時段上的這一堂已經調到別天 */
   function movedAway(S, sp, day) {
     if (sp.extraId || sp.classId) return false;
@@ -314,7 +371,8 @@ var R = (function () {
     var teacher = teacherFor(S, spec.teacherId);
     if (ex) {
       ex.status = "attended"; ex.price = price; ex.packageId = pkg ? pkg.id : null;
-      ex.teacherId = spec.teacherId || null; ex.payout = payoutFor(teacher, price);
+      ex.teacherId = spec.teacherId || null; ex.payout = payoutFor(teacher, price, spec.teacherItemId);
+      ex.teacherItemId = itemOf(teacher, spec.teacherItemId) ? spec.teacherItemId : null;
       ex.noShow = !!noShow;
       if (trial) ex.kind = "trial";
       return ex;
@@ -322,7 +380,9 @@ var R = (function () {
     var s = { id: newId("s"), studentId: spec.studentId, at: at, slotId: spec.slotId || null,
       classId: classId, status: "attended", kind: trial ? "trial" : "regular",
       price: price, packageId: pkg ? pkg.id : null, teacherId: spec.teacherId || null,
-      payout: payoutFor(teacher, price), signature: null, signer: "", noShow: !!noShow };
+      payout: payoutFor(teacher, price, spec.teacherItemId),
+      teacherItemId: itemOf(teacher, spec.teacherItemId) ? spec.teacherItemId : null,
+      signature: null, signer: "", noShow: !!noShow };
     S.sessions.push(s);
     return s;
   }
@@ -552,6 +612,7 @@ var R = (function () {
     recordAt: recordAt, newId: newId, reserveIds: reserveIds, attend: attend, mark: mark, undo: undo, pending: pending,
     scheduleExtra: scheduleExtra, cancelExtra: cancelExtra,
     reschedule: reschedule, cancelReschedule: cancelReschedule, movedAway: movedAway, activeSpecs: activeSpecs,
+    itemOf: itemOf, suggest: suggest,
     expiring: expiring, teacherSchedule: teacherSchedule, receiptNumber: receiptNumber,
     monthSummary: monthSummary, dayLoad: dayLoad, studentMonth: studentMonth, reportSummary: reportSummary,
     salutation: salutation, signature: signature,

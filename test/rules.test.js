@@ -347,5 +347,38 @@ function spec(sid, start, end, extra) {
   eq("已簽到的課不能調", R.reschedule(S, { studentId: "an", from: from, at: to }).error, "attendedCannotMove");
 })();
 
+(function () {
+  // 授課項目:同一位老師不同項目各自拆帳;項目不屬於他就照預設
+  var S = base();
+  S.teachers[2].items = [{ id: "vn", name: "小提琴", mode: "hourly", hourly: 700 }, { id: "th", name: "樂理", mode: "share", sharePct: 40 }];
+  S.packages = [pkg("p1", "kai", 10, 9000)];
+  var sp = spec("kai", 960, 1020, { teacherId: "lin", teacherItemId: "vn", price: 900 });
+  var s = R.attend(S, sp, R.atTime(day(-1), "16:00"));
+  eq("小提琴項目:鐘點 700", [s.payout, s.teacherItemId], [700, "vn"]);
+  s = R.attend(S, spec("kai", 960, 1020, { teacherId: "lin", teacherItemId: "th", price: 900 }), R.atTime(day(-2), "16:00"));
+  eq("樂理項目:抽 40%", s.payout, 360);
+  s = R.attend(S, spec("kai", 960, 1020, { teacherId: "lin", price: 900 }), R.atTime(day(-3), "16:00"));
+  eq("沒指定:老師預設鐘點 500", [s.payout, s.teacherItemId], [500, null]);
+  s = R.attend(S, spec("kai", 960, 1020, { teacherId: "lin", teacherItemId: "nope", price: 900 }), R.atTime(day(-4), "16:00"));
+  eq("不屬於他的項目:照預設", [s.payout, s.teacherItemId], [500, null]);
+  S.slots = [{ id: "sl", dow: T.getDay(), start: "19:00", minutes: 60, studentId: "kai", classId: null, teacherId: "lin", teacherItemId: "vn" }];
+  eq("排課規格帶著時段的項目", R.daySpecs(S, T)[0].teacherItemId, "vn");
+  var r = R.scheduleExtra(S, { studentId: "kai", at: R.atTime(day(1), "10:00"), kind: "regular", teacherId: "lin", teacherItemId: "th" });
+  eq("臨時課記下項目", r.session.teacherItemId, "th");
+})();
+
+(function () {
+  // 推薦空檔:一天一個、習慣時間優先、避開學生與老師
+  var S = base();
+  S.slots = [{ id: "a", dow: day(1).getDay(), start: "16:00", minutes: 60, studentId: "an", classId: null, teacherId: null },
+             { id: "b", dow: day(1).getDay(), start: "17:00", minutes: 60, studentId: "you", classId: null, teacherId: null }];
+  var now = R.atTime(T, "08:00"), list = R.suggest(S, "an", null, 60, day(1), now);
+  eq("推薦三個", list.length, 3);
+  eq("明天 16–18 排滿(小安自己、我教宥宥),跳過明天", R.sod(list[0]).getTime() === day(1).getTime(), false);
+  eq("後天推小安習慣的 16:00", [R.sod(list[0]).getTime() === day(2).getTime(), list[0].getHours()], [true, 16]);
+  var lin = R.suggest(S, "kai", "lin", 60, day(1), now);
+  eq("林老師上的課不受我的課影響:明天 16:00", [R.sod(lin[0]).getTime() === day(1).getTime(), lin[0].getHours()], [true, 16]);
+})();
+
 print("\n" + pass + " 通過," + fail + " 失敗");
 if (fail > 0) throw new Error(fail + " 項失敗");
