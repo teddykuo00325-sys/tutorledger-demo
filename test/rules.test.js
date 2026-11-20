@@ -380,5 +380,25 @@ function spec(sid, start, end, extra) {
   eq("林老師上的課不受我的課影響:明天 16:00", [R.sod(lin[0]).getTime() === day(1).getTime(), lin[0].getHours()], [true, 16]);
 })();
 
+(function () {
+  // 整班調課:全班一起移、算在班上;從任一位取消全班收回;有人沒空就整個不做
+  var S = base();
+  S.packages = [pkg("k1", "you", 8, 4800, { classId: "kids" }), pkg("k2", "yu", 8, 4800, { classId: "kids" })];
+  S.slots = [{ id: "ks", dow: T.getDay(), start: "17:00", minutes: 60, studentId: null, classId: "kids", teacherId: null }];
+  var from = R.atTime(T, "17:00"), to = R.atTime(day(1), "11:00");
+  var r = R.rescheduleClass(S, { classId: "kids", from: from, at: to, minutes: 60 });
+  eq("兩位各排一堂、算在班上", [r.sessions.length, r.sessions[0].classId, r.sessions[1].classId], [2, "kids", "kids"]);
+  eq("原本那堂全班調走", [R.recordAt(S, "you", from).status, R.recordAt(S, "yu", from).status], ["rescheduled", "rescheduled"]);
+  eq("原本那天這班不算課", R.activeSpecs(S, T).length, 0);
+  var s = R.attend(S, R.daySpecs(S, day(1)).filter(function (x) { return x.studentId === "you"; })[0], to);
+  eq("新的那堂用班價、付陳老師五成", [s.price, s.payout, s.packageId], [600, 300, "k1"]);
+  eq("有人上過就不能整班收回", R.cancelReschedule(S, R.recordAt(S, "yu", from).id), false);
+  R.undo(S, s.id);
+  eq("從任一位取消:全班收回", [R.cancelReschedule(S, R.recordAt(S, "yu", from).id), S.sessions.length], [true, 0]);
+  R.scheduleExtra(S, { studentId: "yu", at: to, kind: "regular" });
+  var bad = R.rescheduleClass(S, { classId: "kids", from: from, at: to, minutes: 60 });
+  eq("家瑜沒空:擋下並說是誰,沒留下東西", [bad.error, bad.name, S.sessions.length], ["memberBusy", "家瑜", 1]);
+})();
+
 print("\n" + pass + " 通過," + fail + " 失敗");
 if (fail > 0) throw new Error(fail + " 項失敗");

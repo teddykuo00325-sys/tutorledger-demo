@@ -336,7 +336,7 @@
     return to ? "已調到 " + (to.at.getMonth() + 1) + "月" + to.at.getDate() + "日 " + hm(to.at) : "已調課";
   }
   function extraLabel(rec) {
-    if (rec.linkId) return "調課";
+    if (rec.linkId) { var mc = rec.classId ? R.byId(S.classes, rec.classId) : null; return esc(mc ? "調課 · " + mc.name : "調課"); }
     var k = rec.kind === "makeup" ? "補課" : rec.kind === "trial" ? "臨時體驗課" : "加課";
     var c = rec.classId ? R.byId(S.classes, rec.classId) : null;
     return esc(c ? k + " · " + c.name : k);
@@ -877,9 +877,10 @@
     { id: "move", icon: "calplus", title: "調課", sum: "只把某一堂移到別的時間,每週時段不變。",
       steps: ["在今日頁(或月曆的那一天)長按學生,選「調課…」", "選要改到的日期與時間,按「儲存」",
         "原本那一堂會寫「已調到…」:不扣堂、不算請假", "新的時間那天會出現一堂標著「調課」的課,照常簽到扣堂",
-        "不調了:長按任一堂,選「取消調課」,回到原本的時間"],
+        "不調了:長按任一堂,選「取消調課」,回到原本的時間",
+        "團班的課:長按班上任一位,選「整班調課…」,全班一起移;新的那堂仍算在班上(班級單價、班的堂數包、班上的老師)"],
       where: "今日頁或月曆,長按學生",
-      note: "要長期換時間(例如以後都改週五),到學生頁「編輯」改每週時段。團班的課要整班一起移,目前請用請假與補課。" },
+      note: "要長期換時間(例如以後都改週五),到學生頁或團班的「編輯」改每週時段。" },
     { id: "remind", icon: "bell", title: "課前提醒", sum: "上課前傳一張提醒小卡給家長。",
       steps: ["按今日頁右上角的鈴鐺", "選一位學生,看到他自己的提醒卡", "按「分享給家長」"],
       where: "今日頁右上角", note: "一位學生一張,不做全班總表:列出全班的卡送給任一位家長,等於把其他孩子的名字送出去。" },
@@ -966,7 +967,8 @@
     var rec = R.recordAt(S, f.spec.studentId, f.at), items = [];
     if (rec && rec.status === "rescheduled") {
       // 已經調走的課:只能整個取消調課,回到原本的時間
-      items.push({ label: "取消調課(回到原本時間)", act: "cancelMove", data: ' data-sess="' + rec.id + '"' });
+      items.push({ label: rec.classId ? "取消整班調課(回到原本時間)" : "取消調課(回到原本時間)", act: "cancelMove",
+        data: ' data-sess="' + rec.id + '"' });
       return openActions(f.spec.name + " · " + range(f.spec.startMin, f.spec.endMin), movedText(rec), items);
     }
     if (!rec || rec.status === "planned" || rec.noShow) {
@@ -983,7 +985,13 @@
       items.push({ label: "安排補課…", act: "extra", data: ' data-sid="' + f.spec.studentId + '" data-day="' + iso(next) +
         '" data-start="' + f.spec.start + '" data-min="' + (f.spec.endMin - f.spec.startMin) + '" data-cls="' + (f.spec.classId || "") + '"' });
     }
-    // 調課:每週時段上的個別課,還沒上。團班的一堂是整班一起移,不在這裡做
+    // 整班調課:團班的一堂全班一起移
+    if (!f.spec.extraId && f.spec.classId && !(rec && rec.status === "attended")) {
+      var cnx = R.addDays(R.sod(f.day) > T ? R.sod(f.day) : T, 1);
+      items.push({ label: "整班調課…", act: "moveClass", data: ' data-cid="' + f.spec.classId + '" data-day="' + iso(cnx) +
+        '" data-start="' + f.spec.start + '" data-min="' + (f.spec.endMin - f.spec.startMin) + '" data-from="' + iso(f.day) + '"' });
+    }
+    // 調課:每週時段上的個別課,還沒上
     if (!f.spec.extraId && !f.spec.classId && !(rec && rec.status === "attended")) {
       var nx = R.addDays(R.sod(f.day) > T ? R.sod(f.day) : T, 1);
       items.push({ label: "調課…", act: "move", data: ' data-sid="' + f.spec.studentId + '" data-day="' + iso(nx) +
@@ -1013,14 +1021,16 @@
       studs.map(function (x) { return when("sid=" + x.id, suggestGroup(x.id, null, d.minutes || 60, d.day || T)); }).join(""));
   }
   /** 推薦時間(三個空檔,點一下填進日期與時間)。規則在 R.suggest */
-  function suggestGroup(sid, teacherId, minutes, from) {
-    var list = R.suggest(S, sid, teacherId, minutes, from, NOW);
+  function suggestGroup(sid, teacherId, minutes, from, cls) {
+    var ids = cls ? cls.members.filter(function (m) { return !m.leftAt; }).map(function (m) { return m.studentId; }) : [sid];
+    var list = R.suggest(S, ids, teacherId, minutes, from, NOW, cls ? cls.id : null);
     if (!list.length) return "";
     return group('<span class="warn-h">' + icon("calplus") + "推薦時間</span>", list.map(function (at) {
       var rel = R.sod(at).getTime() === T.getTime() ? "今天" : R.sod(at).getTime() === R.addDays(T, 1).getTime() ? "明天" : WEEK[at.getDay()];
       return rowBtn((at.getMonth() + 1) + "月" + at.getDate() + "日(" + rel + ") " + hm(at), "", "pickSuggest",
         ' data-date="' + iso(at) + '" data-start="' + hm(at) + '"');
-    }).join(""), "避開" + esc(student(sid).name) + "與授課老師當天的其他課,優先挑他平常上課的時間。點一下就填好,也可以自己改。");
+    }).join(""), cls ? "避開全班每一位與班上老師當天的其他課,優先挑這個班平常的時間。點一下就填好,也可以自己改。"
+      : "避開" + esc(student(sid).name) + "與授課老師當天的其他課,優先挑他平常上課的時間。點一下就填好,也可以自己改。");
   }
   /** 調課:只移這一堂,每週時段不變(ExtraLessonSheet 的調課模式) */
   function openMove(d) {
@@ -1035,6 +1045,18 @@
       group("", picker("teacher", "授課老師", teacherOpts(), d.teacherId || "me") +
         itemPickers("teacher", "", d.teacherId || null, d.teacherItemId || null)) +
       suggestGroup(d.studentId, d.teacherId || null, d.minutes || 60, d.day));
+  }
+  /** 整班調課(ExtraLessonSheet 的整班模式) */
+  function openMoveClass(d) {
+    var c = klass(d.cid), n = c.members.filter(function (m) { return R.isMember(m, d.fromDay); }).length;
+    formSheet("moveClass", "整班調課",
+      '<input type="hidden" name="cid" value="' + d.cid + '"><input type="hidden" name="from" value="' + d.from +
+        '"><input type="hidden" name="fromStart" value="' + d.start + '">' +
+      group("", lc("團班", esc(c.name)) + lc("成員", n + " 位") + lc("原本", dateText(d.fromDay) + " " + d.start),
+        "全班一起移到新的時間,每週時段不變。原本那一堂不扣堂、不算請假;新的時間照常算在班上:班級單價、扣班的堂數包、由班上的老師上。") +
+      group("", dateField("date", "改到", iso(d.day)) + timeField("start", "開始時間", d.start) +
+        picker("min", "單堂時長", durOpts(), d.minutes || 60)) +
+      suggestGroup(null, c.teacherId || null, d.minutes || 60, d.day, c));
   }
   /** 學生目前在上的班 */
   function classesOf(sid) {
@@ -1329,6 +1351,16 @@
       closeSheet(); render();
       return toast("已調到 " + (md.getMonth() + 1) + "月" + md.getDate() + "日 " + hm(md));
     }
+    if (f === "moveClass") {
+      var cd = fromIso(v.date) || T, cs = R.toMin(v.start || "18:00"), cf = fromIso(v.from), cfs = R.toMin(v.fromStart);
+      cd.setHours(Math.floor(cs / 60), cs % 60, 0, 0);
+      cf.setHours(Math.floor(cfs / 60), cfs % 60, 0, 0);
+      var cr = R.rescheduleClass(S, { classId: v.cid, from: cf, at: cd, minutes: num(v.min) || 60 });
+      if (cr.error) return toast(cr.error === "memberBusy" ? cr.name + "這個時間已經有課了,整班沒辦法移過去"
+        : cr.error === "memberAttended" ? cr.name + "這一堂已經簽到了,要先撤銷簽到" : "這一堂已經調過了");
+      closeSheet(); render();
+      return toast("全班已調到 " + (cd.getMonth() + 1) + "月" + cd.getDate() + "日 " + hm(cd));
+    }
     if (f === "addStudent") {
       if (!v.name) return toast("請輸入姓名");
       var id = R.newId("st");
@@ -1552,6 +1584,12 @@
           sf.elements.date.value = b.getAttribute("data-date"); sf.elements.start.value = b.getAttribute("data-start");
           Array.prototype.forEach.call(sf.querySelectorAll('[data-act="pickSuggest"]'), function (x) { x.classList.toggle("picked", x === b); });
         }
+        break;
+      case "moveClass":
+        closeSheet();
+        openMoveClass({ cid: b.getAttribute("data-cid"), day: fromIso(b.getAttribute("data-day")) || T,
+          fromDay: fromIso(b.getAttribute("data-from")), from: b.getAttribute("data-from"),
+          start: b.getAttribute("data-start"), minutes: num(b.getAttribute("data-min")) || 60 });
         break;
       case "cancelMove":
         closeSheet();

@@ -223,14 +223,61 @@ var R = (function () {
     var s = byId(S.sessions, id);
     if (!s) return false;
     var other = s.linkId ? byId(S.sessions, s.linkId) : null;
-    var newOne = s.status === "rescheduled" ? other : s;
-    if (newOne && newOne.status === "attended") return false;
-    S.sessions = S.sessions.filter(function (x) { return x !== s && x !== other; });
+    var orig = s.status === "rescheduled" ? s : other;
+    var pairs = [[orig, s.status === "rescheduled" ? other : s]];
+    // 整班調課:同一班、同一時刻調走的每一位一起收回
+    if (orig && orig.classId) {
+      S.sessions.forEach(function (x) {
+        if (x !== orig && x.status === "rescheduled" && x.classId === orig.classId && sameMinute(x.at, orig.at)) {
+          pairs.push([x, x.linkId ? byId(S.sessions, x.linkId) : null]);
+        }
+      });
+    }
+    if (pairs.some(function (p) { return p[1] && p[1].status === "attended"; })) return false;
+    var drop = [];
+    pairs.forEach(function (p) { if (p[0]) drop.push(p[0]); if (p[1]) drop.push(p[1]); });
+    S.sessions = S.sessions.filter(function (x) { return drop.indexOf(x) < 0; });
     return true;
+  }
+  /** 整班調課:團班的一堂全班一起移,新的那堂算在班上(班級單價、班的包、班上的老師)。
+   *  有人在新時間有課或已經簽到,整個不做。(LedgerService.rescheduleClass) */
+  function rescheduleClass(S, o) {
+    var c = byId(S.classes, o.classId);
+    if (!c) return { error: "noClass" };
+    var members = c.members.filter(function (m) {
+      var st = byId(S.students, m.studentId);
+      return st && !st.archivedAt && isMember(m, o.from);
+    }).map(function (m) { return m.studentId; });
+    for (var i = 0; i < members.length; i++) {
+      var ex = recordAt(S, members[i], o.from);
+      if (ex && ex.status === "attended") return { error: "memberAttended", name: byId(S.students, members[i]).name };
+      if (ex && ex.status === "rescheduled") return { error: "alreadyMoved" };
+    }
+    var made = [];
+    for (var j = 0; j < members.length; j++) {
+      var r = scheduleExtra(S, { studentId: members[j], at: o.at, minutes: o.minutes, kind: "regular", classId: c.id });
+      if (r.error) {
+        S.sessions = S.sessions.filter(function (x) { return made.indexOf(x) < 0; });
+        return { error: "memberBusy", name: byId(S.students, members[j]).name };
+      }
+      made.push(r.session);
+    }
+    made.forEach(function (n) {
+      var orig = recordAt(S, n.studentId, o.from);
+      if (!orig) {
+        orig = { id: newId("s"), studentId: n.studentId, at: o.from, slotId: null, kind: "regular", price: 0,
+          packageId: null, teacherId: c.teacherId || null, payout: 0, signature: null, signer: "" };
+        S.sessions.push(orig);
+      }
+      orig.status = "rescheduled"; orig.classId = c.id; orig.packageId = null; orig.price = 0; orig.payout = 0;
+      orig.noShow = false; orig.linkId = n.id; n.linkId = orig.id;
+    });
+    return { sessions: made };
   }
   /** 推薦空檔:避開這位學生與授課老師當天的其他課,學生平常的時間優先,在所有每週時段的範圍內,
    *  一天一個、由近到遠最多三個。(SlotSuggestion.suggest / LedgerService.suggestTimes) */
-  function suggest(S, studentId, teacherId, minutes, from, now) {
+  function suggest(S, studentIds, teacherId, minutes, from, now, classId) {
+    if (!Array.isArray(studentIds)) studentIds = [studentIds];
     var live = S.slots.filter(function (sl) {
       var st = sl.studentId ? byId(S.students, sl.studentId) : null, c = sl.classId ? byId(S.classes, sl.classId) : null;
       return (st && !st.archivedAt) || (c && !c.archivedAt);
@@ -241,17 +288,20 @@ var R = (function () {
       close = Math.max.apply(null, live.map(function (sl) { return toMin(sl.start) + sl.minutes; }));
     }
     var mineClasses = S.classes.filter(function (c) {
-      return c.members.some(function (m) { return m.studentId === studentId && !m.leftAt; });
+      return c.members.some(function (m) { return m.studentId === studentIds[0] && !m.leftAt; });
     }).map(function (c) { return c.id; });
     var pref = [];
-    S.slots.filter(function (sl) { return sl.studentId === studentId || mineClasses.indexOf(sl.classId) >= 0; })
+    // 整班:這個班平常的時間;個別:學生自己的時段與他上的班
+    S.slots.filter(function (sl) {
+      return classId ? sl.classId === classId : (sl.studentId === studentIds[0] || mineClasses.indexOf(sl.classId) >= 0);
+    })
       .map(function (sl) { return toMin(sl.start); }).sort(function (a, b) { return a - b; })
       .forEach(function (m) { if (pref.indexOf(m) < 0) pref.push(m); });
     var out = [], start = sod(from > now ? from : now);
     for (var i = 0; i < 14 && out.length < 3; i++) {
       var day = addDays(start, i);
       var busy = activeSpecs(S, day).filter(function (sp) {
-        return sp.studentId === studentId || (sp.teacherId || null) === (teacherId || null);
+        return studentIds.indexOf(sp.studentId) >= 0 || (sp.teacherId || null) === (teacherId || null);
       });
       var free = function (s) {
         var e = s + minutes;
@@ -275,7 +325,7 @@ var R = (function () {
 
   /** 每週時段上的這一堂已經調到別天 */
   function movedAway(S, sp, day) {
-    if (sp.extraId || sp.classId) return false;
+    if (sp.extraId) return false;
     var r = recordAt(S, sp.studentId, atTime(day, sp.start));
     return !!(r && r.status === "rescheduled");
   }
@@ -612,7 +662,7 @@ var R = (function () {
     recordAt: recordAt, newId: newId, reserveIds: reserveIds, attend: attend, mark: mark, undo: undo, pending: pending,
     scheduleExtra: scheduleExtra, cancelExtra: cancelExtra,
     reschedule: reschedule, cancelReschedule: cancelReschedule, movedAway: movedAway, activeSpecs: activeSpecs,
-    itemOf: itemOf, suggest: suggest,
+    itemOf: itemOf, suggest: suggest, rescheduleClass: rescheduleClass, isMember: isMember,
     expiring: expiring, teacherSchedule: teacherSchedule, receiptNumber: receiptNumber,
     monthSummary: monthSummary, dayLoad: dayLoad, studentMonth: studentMonth, reportSummary: reportSummary,
     salutation: salutation, signature: signature,
